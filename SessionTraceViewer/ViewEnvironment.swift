@@ -46,6 +46,10 @@ enum ViewerTheme {
     static let metricRowBackground = rgb(247, 248, 250)
     static let valueChangedBackground = rgb(242, 245, 250)
     static let valueChangedAccent = rgb(105, 119, 148)
+    static let diffOldHighlightBackground = rgb(255, 235, 233)
+    static let diffOldHighlightText = rgb(207, 34, 46)
+    static let diffNewHighlightBackground = rgb(218, 251, 225)
+    static let diffNewHighlightText = rgb(26, 127, 55)
 
     static let stateFamily = SemanticFamily(
         base: rgb(94, 104, 128),

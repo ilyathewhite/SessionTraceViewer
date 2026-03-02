@@ -118,6 +118,33 @@ final class SessionTraceViewerTests: XCTestCase {
         }
     }
 
+    func testStateValueRowsCarryComparisonValuesForChangedProperties() throws {
+        let state = try makeStateFromGeneratedTrace()
+        let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
+            item.kind == .state
+        }
+        guard stateItems.count > 1 else {
+            throw XCTSkip("Need at least two state items to compare values.")
+        }
+
+        let previousItem = stateItems[0]
+        let currentItem = stateItems[1]
+        guard let valueRows = InspectorFormatter.valueRows(
+            for: currentItem,
+            previousStateItem: previousItem
+        ) else {
+            XCTFail("Expected state item rows.")
+            return
+        }
+        guard let countRow = valueRows.first(where: { $0.property == "count" }) else {
+            throw XCTSkip("count property missing from state rows.")
+        }
+
+        XCTAssertTrue(countRow.isChanged)
+        XCTAssertEqual(countRow.change?.oldValue, formattedStateValue(property: "count", in: previousItem))
+        XCTAssertEqual(countRow.change?.newValue, formattedStateValue(property: "count", in: currentItem))
+    }
+
     func testSelectEventKeepsTimelineAndGraphSelectionInSync() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
@@ -773,5 +800,14 @@ final class SessionTraceViewerTests: XCTestCase {
             label.append(character)
         }
         return label.count > 1 ? label : nil
+    }
+
+    private func formattedStateValue(property: String, in item: TraceViewer.TimelineItem) -> String? {
+        guard case .state(let stateNode) = item.node else { return nil }
+        return stateNode.state
+            .first(where: { $0.property == property })?
+            .value
+            .replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\t", with: "\t")
     }
 }

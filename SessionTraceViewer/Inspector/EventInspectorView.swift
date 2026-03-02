@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import ReducerArchitecture
 
 struct EventInspectorView: View {
     private enum Layout {
@@ -18,13 +19,19 @@ struct EventInspectorView: View {
         static let rowTopPadding: CGFloat = 5
         static let rowBottomPadding: CGFloat = 5
         static let expandableRowExtraTopPadding: CGFloat = 6
+        static let rowHorizontalPadding: CGFloat = 12
+        static let diffIndicatorColumnWidth: CGFloat = 16
+        static let diffIndicatorTrailingPadding: CGFloat = 2
     }
 
     let item: TraceViewer.TimelineItem?
     let previousStateItem: TraceViewer.TimelineItem?
 
+    @Environment(\.openWindow) private var openWindow
     @State private var detailRowExpansionByID: [String: Bool] = [:]
     @State private var valueRowExpansionByID: [String: Bool] = [:]
+    @State private var inlineStringDiffUI: StoreUI<StringDiff>?
+    @State private var inlineDiffRowID: String?
 
     func propertyView(key: String) -> some View {
         Text(key)
@@ -72,9 +79,10 @@ struct EventInspectorView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onChange(of: item?.id) { _ in
+        .onChange(of: item?.id) { _, _ in
             detailRowExpansionByID = [:]
             valueRowExpansionByID = [:]
+            dismissInlineDiff()
         }
     }
 
@@ -86,6 +94,7 @@ struct EventInspectorView: View {
                 property: pair.0,
                 value: pair.1,
                 isChanged: false,
+                change: nil,
                 isExpandable: InspectorFormatter.valueNeedsExpansion(pair.1),
                 isExpandedByDefault: InspectorFormatter.valueExpandsByDefault(pair.1)
             )
@@ -94,7 +103,8 @@ struct EventInspectorView: View {
         inspectorGridCard(
             title: "Details",
             rows: rows,
-            rowExpansionByID: $detailRowExpansionByID
+            rowExpansionByID: $detailRowExpansionByID,
+            onRowTap: nil
         )
     }
 
@@ -103,7 +113,8 @@ struct EventInspectorView: View {
         inspectorGridCard(
             title: "Value",
             rows: rows,
-            rowExpansionByID: $valueRowExpansionByID
+            rowExpansionByID: $valueRowExpansionByID,
+            onRowTap: presentDiff
         )
     }
 
@@ -111,8 +122,11 @@ struct EventInspectorView: View {
     private func inspectorGridCard(
         title: String,
         rows: [InspectorFormatter.ValueRow],
-        rowExpansionByID: Binding<[String: Bool]>
+        rowExpansionByID: Binding<[String: Bool]>,
+        onRowTap: ((InspectorFormatter.ValueRow) -> Void)?
     ) -> some View {
+        let showsDiffColumn = rows.contains { $0.change != nil }
+
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.body.weight(.semibold))
@@ -131,14 +145,37 @@ struct EventInspectorView: View {
                             )
                         }
 
+                        if showsDiffColumn {
+                            diffIndicatorColumn(row: row)
+                        }
+
                         valueColumn(row: row, isExpanded: isExpanded)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard row.change != nil else { return }
+                        onRowTap?(row)
+                    }
+
+                    if inlineDiffRowID == row.id, let inlineStringDiffUI {
+                        GridRow(alignment: .top) {
+                            Color.clear
+                                .frame(width: 1, height: 1)
+
+                            if showsDiffColumn {
+                                Color.clear
+                                    .frame(width: Layout.diffIndicatorColumnWidth)
+                            }
+
+                            inlineDiffValueColumn(inlineStringDiffUI)
+                        }
                     }
 
                     if index < rows.count - 1 {
                         Rectangle()
                             .fill(ViewerTheme.sectionStroke)
                             .frame(height: 1)
-                            .gridCellColumns(2)
+                            .gridCellColumns(showsDiffColumn ? 3 : 2)
                     }
                 }
             }
@@ -188,7 +225,27 @@ struct EventInspectorView: View {
             propertyView(key: row.property)
                 .foregroundStyle(ViewerTheme.inspectorPropertyText)
         }
-        .padding(.leading, 8)
+        .padding(.leading, Layout.rowHorizontalPadding)
+        .padding(.trailing, Layout.rowHorizontalPadding)
+        .padding(.top, topPadding)
+        .padding(.bottom, Layout.rowBottomPadding)
+    }
+
+    private func diffIndicatorColumn(row: InspectorFormatter.ValueRow) -> some View {
+        let topPadding = Layout.rowTopPadding + (row.isExpandable ? Layout.expandableRowExtraTopPadding : 0)
+
+        return Group {
+            if row.change != nil {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(ViewerTheme.valueChangedAccent)
+            }
+            else {
+                Color.clear
+            }
+        }
+        .frame(width: Layout.diffIndicatorColumnWidth)
+        .padding(.trailing, Layout.diffIndicatorTrailingPadding)
         .padding(.top, topPadding)
         .padding(.bottom, Layout.rowBottomPadding)
     }
@@ -222,12 +279,80 @@ struct EventInspectorView: View {
         }
     }
 
+    private func inlineDiffValueColumn(_ stringDiffUI: StoreUI<StringDiff>) -> some View {
+        stringDiffUI.makeView()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 8)
+            .padding(.top, 4)
+            .padding(.bottom, Layout.rowBottomPadding)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(ViewerTheme.sectionStroke)
+                    .frame(width: Layout.separatorWidth)
+                    .offset(x: -(Layout.columnSpacing / 2))
+            }
+    }
+
     private func toggleRowExpansion(
         id: String,
         currentValue: Bool,
         rowExpansionByID: Binding<[String: Bool]>
     ) {
         rowExpansionByID.wrappedValue[id] = !currentValue
+    }
+
+    private func presentDiff(for row: InspectorFormatter.ValueRow) {
+        guard let change = row.change else { return }
+        if shouldPresentDiffInline(change: change) {
+            if inlineDiffRowID == row.id {
+                dismissInlineDiff()
+            }
+            else {
+                inlineDiffRowID = row.id
+                inlineStringDiffUI = .init(
+                    StringDiff.store(
+                        title: row.property,
+                        presentationStyle: .inlineEmbedded,
+                        string1Caption: "Old Value",
+                        string1: change.oldValue,
+                        string2Caption: "New Value",
+                        string2: change.newValue
+                    )
+                )
+            }
+        }
+        else {
+            dismissInlineDiff()
+            openWindow(
+                id: StringDiff.windowID,
+                value: StringDiff.WindowRequest(
+                    title: row.property,
+                    string1Caption: "Old Value",
+                    string1: change.oldValue,
+                    string2Caption: "New Value",
+                    string2: change.newValue
+                )
+            )
+        }
+    }
+
+    private func dismissInlineDiff() {
+        inlineStringDiffUI?.cancel()
+        inlineStringDiffUI = nil
+        inlineDiffRowID = nil
+    }
+
+    private func shouldPresentDiffInline(change: InspectorFormatter.ValueChange) -> Bool {
+        let maxLineCount = 4
+        let maxCombinedCharacterCount = 280
+
+        return lineCount(of: change.oldValue) <= maxLineCount
+            && lineCount(of: change.newValue) <= maxLineCount
+            && (change.oldValue.count + change.newValue.count) <= maxCombinedCharacterCount
+    }
+
+    private func lineCount(of value: String) -> Int {
+        max(value.split(separator: "\n", omittingEmptySubsequences: false).count, 1)
     }
 
     private func isStateItem(_ item: TraceViewer.TimelineItem) -> Bool {

@@ -9,14 +9,22 @@ import Foundation
 import ReducerArchitecture
 
 enum InspectorFormatter {
+    struct ValueChange: Equatable {
+        let oldValue: String
+        let newValue: String
+    }
+
     struct ValueRow: Identifiable, Equatable {
         let id: String
         let property: String
         let value: String
         let isChanged: Bool
+        let change: ValueChange?
         let isExpandable: Bool
         let isExpandedByDefault: Bool
     }
+
+    private static let missingValuePlaceholder = "<missing>"
 
     static func effectSubtitle(_ effect: SessionGraph.EffectNode) -> String {
         var parts: [String] = [effect.kind.rawValue]
@@ -119,12 +127,17 @@ enum InspectorFormatter {
             let isChanged = previousValuesByProperty.map { valuesByProperty in
                 valuesByProperty[pair.property] != formattedValue
             } ?? false
+            let change = isChanged ? ValueChange(
+                oldValue: previousValuesByProperty?[pair.property] ?? missingValuePlaceholder,
+                newValue: formattedValue
+            ) : nil
 
             return .init(
                 id: pair.property,
                 property: pair.property,
                 value: formattedValue,
                 isChanged: isChanged,
+                change: change,
                 isExpandable: isExpandableValue(formattedValue),
                 isExpandedByDefault: shouldExpandByDefault(formattedValue)
             )
