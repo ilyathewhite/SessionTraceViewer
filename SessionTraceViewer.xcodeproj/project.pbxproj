@@ -28,6 +28,9 @@
 		09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0042A00000500C831B2 /* StringDiffUI.swift */; };
 		09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */; };
 		09F0A00C2A00000C00C831B2 /* SwiftUIEx in Frameworks */ = {isa = PBXBuildFile; productRef = 09F0A00D2A00000D00C831B2 /* SwiftUIEx */; };
+		09F0A0102A00001000C831B2 /* LiveTraceServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */; };
+		09F0A0122A00001200C831B2 /* LiveTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0112A00001100C831B2 /* LiveTraceStore.swift */; };
+		09F0A0152A00001500C831B2 /* LiveTraceUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0142A00001400C831B2 /* LiveTraceUI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +74,9 @@
 		09F0A0022A00000300C831B2 /* StringDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiff.swift; sourceTree = "<group>"; };
 		09F0A0042A00000500C831B2 /* StringDiffUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffUI.swift; sourceTree = "<group>"; };
 		09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffEnv.swift; sourceTree = "<group>"; };
+		09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceServer.swift; sourceTree = "<group>"; };
+		09F0A0112A00001100C831B2 /* LiveTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceStore.swift; sourceTree = "<group>"; };
+		09F0A0142A00001400C831B2 /* LiveTraceUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceUI.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +131,7 @@
 			children = (
 				09B2DD9629BB98C800C831B2 /* SessionTraceDocument */,
 				09B2DD7629B99E4700C831B2 /* TraceViewer */,
+				09F0A0132A00001300C831B2 /* LiveTrace */,
 				09B2DD6629B8FF6700C831B2 /* Inspector */,
 				09F0A0062A00000600C831B2 /* StringDiff */,
 				09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */,
@@ -199,6 +206,16 @@
 				09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
 			);
 			path = StringDiff;
+			sourceTree = "<group>";
+		};
+		09F0A0132A00001300C831B2 /* LiveTrace */ = {
+			isa = PBXGroup;
+			children = (
+				09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */,
+				09F0A0112A00001100C831B2 /* LiveTraceStore.swift */,
+				09F0A0142A00001400C831B2 /* LiveTraceUI.swift */,
+			);
+			path = LiveTrace;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -343,6 +360,9 @@
 				09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */,
 				09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */,
 				09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */,
+				09F0A0102A00001000C831B2 /* LiveTraceServer.swift in Sources */,
+				09F0A0122A00001200C831B2 /* LiveTraceStore.swift in Sources */,
+				09F0A0152A00001500C831B2 /* LiveTraceUI.swift in Sources */,
 				09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */,
 				09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */,
 				09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */,
@@ -686,8 +706,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ilyathewhite/ReducerArchitecture.git";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.8;
 			};
 		};
 		09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */ = {

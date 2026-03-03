@@ -14,6 +14,7 @@ enum TraceViewer: StoreNamespace {
     struct StoreEnvironment {}
 
     enum MutatingAction {
+        case replaceTraceCollection(SessionTraceCollection)
         case selectEvent(id: String)
         case selectNextVisible
         case selectPreviousVisible
@@ -512,6 +513,18 @@ enum TraceViewer: StoreNamespace {
 
             for id in orderedIDs where hasChildren(id) && !protected.contains(id) {
                 collapsedIDs.insert(id)
+            }
+            clampSelection()
+        }
+
+        mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+            let previousSelectedID = selectedID
+            let previousCollapsedIDs = collapsedIDs
+
+            self = .init(traceCollection: traceCollection)
+            collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
+            if let previousSelectedID, itemsByID[previousSelectedID] != nil {
+                selectedID = previousSelectedID
             }
             clampSelection()
         }
@@ -1281,6 +1294,9 @@ extension TraceViewer {
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
         switch action {
+        case .replaceTraceCollection(let traceCollection):
+            state.replaceTraceCollection(traceCollection)
+
         case .selectEvent(let id):
             state.selectedID = id
 

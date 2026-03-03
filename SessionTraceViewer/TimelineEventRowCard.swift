@@ -16,7 +16,7 @@ struct TimelineEventRowCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(item.kind.rawValue.uppercased())
@@ -34,6 +34,7 @@ struct TimelineEventRowCard: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(ViewerTheme.primaryText)
                         .lineLimit(1)
+                        .layoutPriority(1)
 
                     Spacer(minLength: 0)
                 }
@@ -41,11 +42,14 @@ struct TimelineEventRowCard: View {
                 subtitleText
                     .lineLimit(1)
                     .padding(.leading, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(item.timeLabel)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(ViewerTheme.timestampText)
+                .fixedSize()
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 6)

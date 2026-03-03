@@ -204,6 +204,22 @@ final class SessionTraceViewerTests: XCTestCase {
         }
     }
 
+    func testReplaceTraceCollectionPreservesSelectionAndCollapsedState() throws {
+        var state = try makeStateFromGeneratedTrace()
+        guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {
+            throw XCTSkip("Trace did not contain a collapsible node.")
+        }
+
+        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID))
+        _ = TraceViewer.reduce(&state, .collapseSelected)
+
+        let traceCollection = state.traceCollection
+        _ = TraceViewer.reduce(&state, .replaceTraceCollection(traceCollection))
+
+        XCTAssertEqual(state.selectedID, collapsibleID)
+        XCTAssertTrue(state.collapsedIDs.contains(collapsibleID))
+    }
+
     func testRecordMeetingTimerEffectKeepsOneLaneForItsMutatingActions() throws {
         let state = try makeStateFromRecordMeetingTrace()
 

@@ -136,7 +136,7 @@ struct EventInspectorView: View {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     let isExpanded = rowExpansionByID.wrappedValue[row.id] ?? row.isExpandedByDefault
 
-                    GridRow(alignment: .firstTextBaseline) {
+                    GridRow(alignment: .top) {
                         propertyColumn(row: row, isExpanded: isExpanded) {
                             toggleRowExpansion(
                                 id: row.id,
@@ -208,7 +208,7 @@ struct EventInspectorView: View {
     ) -> some View {
         let topPadding = Layout.rowTopPadding + (row.isExpandable ? Layout.expandableRowExtraTopPadding : 0)
 
-        return HStack(alignment: .firstTextBaseline, spacing: Layout.disclosureSpacing) {
+        return HStack(alignment: .top, spacing: Layout.disclosureSpacing) {
             if row.isExpandable {
                 Button(action: action) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
@@ -217,9 +217,6 @@ struct EventInspectorView: View {
                         .frame(width: Layout.disclosureWidth, height: Layout.disclosureHeight)
                 }
                 .buttonStyle(.plain)
-                .alignmentGuide(.firstTextBaseline) { dimensions in
-                    dimensions[VerticalAlignment.bottom] - 6
-                }
             }
 
             propertyView(key: row.property)
@@ -270,13 +267,12 @@ struct EventInspectorView: View {
                         .padding(.leading, -(Layout.columnSpacing / 2))
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .topLeading)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(ViewerTheme.sectionStroke)
-                .frame(width: Layout.separatorWidth)
-                .offset(x: -(Layout.columnSpacing / 2))
-        }
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(ViewerTheme.sectionStroke)
+                    .frame(width: Layout.separatorWidth)
+                    .offset(x: -(Layout.columnSpacing / 2))
+            }
     }
 
     private func inlineDiffValueColumn(_ stringDiffUI: StoreUI<StringDiff>) -> some View {

@@ -13,34 +13,37 @@ extension TraceViewer: StoreUINamespace {
         typealias Nsp = TraceViewer
         @ObservedObject var store: Store
         @FocusState private var hasKeyboardFocus: Bool
-        private let timelineListWidth: CGFloat = 420
+        private let timelineListIdealWidth: CGFloat = 420
+        private let timelineListMinimumWidth: CGFloat = 220
 
         init(_ store: Store) {
             self.store = store
         }
 
         var body: some View {
-            ZStack {
-                ViewerTheme.background
-                    .ignoresSafeArea()
+            GeometryReader { geometry in
+                ZStack {
+                    ViewerTheme.background
+                        .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    overviewPanel
+                    VStack(spacing: 0) {
+                        overviewPanel
 
-                    HStack(spacing: 0) {
-                        timelineListPanel
-                            .frame(width: timelineListWidth)
-                            .frame(maxHeight: .infinity)
+                        HStack(spacing: 0) {
+                            timelineListPanel
+                                .frame(width: timelineListWidth(for: geometry.size.width))
+                                .frame(maxHeight: .infinity)
 
-                        Divider()
+                            Divider()
 
-                        inspectorPanel
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            inspectorPanel
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(minWidth: 980, minHeight: 860)
             .buttonStyle(.borderless)
             .preferredColorScheme(.light)
             .contentShape(Rectangle())
@@ -59,6 +62,14 @@ extension TraceViewer: StoreUINamespace {
                     }
             )
             .onMoveCommand(perform: handleMove)
+        }
+
+        private func timelineListWidth(for availableWidth: CGFloat) -> CGFloat {
+            let preferredWidth = min(
+                timelineListIdealWidth,
+                max(timelineListMinimumWidth, availableWidth * 0.42)
+            )
+            return min(max(availableWidth - 1, 0), preferredWidth)
         }
 
         private var overviewPanel: some View {

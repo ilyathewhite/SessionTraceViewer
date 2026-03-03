@@ -20,5 +20,6 @@ struct SessionTraceDocumentView: View {
 
     var body: some View {
         TraceViewer.ContentView(store)
+            .frame(minWidth: 980, minHeight: 860)
     }
 }

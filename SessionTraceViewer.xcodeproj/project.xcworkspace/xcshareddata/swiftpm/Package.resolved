@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ilyathewhite/ReducerArchitecture.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "8b2eee6fbc1c467bec63f6ac797a557b287789f2"
+        "revision" : "dfe8aedf8bb32f308dc6584b83f23d98eac982ce",
+        "version" : "1.4.8"
       }
     },
     {

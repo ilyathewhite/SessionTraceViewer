@@ -22,7 +22,7 @@ struct SessionTraceDocument: FileDocument {
 
     var traceCollection: SessionTraceCollection
 
-    init(traceCollection: SessionTraceCollection = .placeholder) {
+    init(traceCollection: SessionTraceCollection = .placeholder()) {
         self.traceCollection = traceCollection
     }
 
@@ -40,12 +40,15 @@ struct SessionTraceDocument: FileDocument {
     }
 }
 
-private extension SessionTraceCollection {
-    static var placeholder: SessionTraceCollection {
+extension SessionTraceCollection {
+    static func placeholder(
+        title: String = "Session Trace",
+        sessionID: String = "placeholder.s0"
+    ) -> SessionTraceCollection {
         .init(
-            title: "Session Trace",
+            title: title,
             sessionGraph: .init(
-                storeInstanceID: "placeholder.s0",
+                storeInstanceID: .init(rawValue: sessionID),
                 nodes: [],
                 edges: []
             )
