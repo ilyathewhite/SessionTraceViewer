@@ -14,10 +14,10 @@ struct SessionTraceViewerApp: App {
             SessionTraceDocumentView(document: file.document)
         }
 
-        WindowGroup("Value Diff", id: StringDiff.windowID, for: StringDiff.WindowRequest.self) { request in
-            if let request = request.wrappedValue {
+        WindowGroup("Value Diff", id: StringDiff.windowID, for: StringDiff.Input.self) { input in
+            if let input = input.wrappedValue {
                 NavigationStack {
-                    StringDiffWindowView(request: request)
+                    StringDiffWindowView(input: input)
                 }
             }
             else {

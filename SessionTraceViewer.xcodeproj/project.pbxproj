@@ -14,18 +14,20 @@
 		09B2DD5529B8FEDF00C831B2 /* SessionTraceViewerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD5429B8FEDF00C831B2 /* SessionTraceViewerUITests.swift */; };
 		09B2DD5729B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD5629B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift */; };
 		09B2DD6529B8FF4400C831B2 /* ReducerArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 09B2DD6429B8FF4400C831B2 /* ReducerArchitecture */; };
-			09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */; };
-			09B2DD6A29B8FFAB00C831B2 /* EventInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */; };
-			09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */; };
-			09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */; };
-			09F0A0032A00000300C831B2 /* StringDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0022A00000300C831B2 /* StringDiff.swift */; };
-			09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0042A00000500C831B2 /* StringDiffUI.swift */; };
-			09B2DD7829B99E8900C831B2 /* TraceViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7729B99E8900C831B2 /* TraceViewer.swift */; };
+		09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */; };
+		09B2DD6A29B8FFAB00C831B2 /* EventInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */; };
+		09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */; };
+		09B2DD7829B99E8900C831B2 /* TraceViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7729B99E8900C831B2 /* TraceViewer.swift */; };
 		09B2DD7A29B99E9400C831B2 /* TraceViewerUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */; };
 		09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */; };
 		09B2DD8F29BB946800C831B2 /* SessionTraceDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD8E29BB946800C831B2 /* SessionTraceDocument.swift */; };
 		09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD9429BB98C200C831B2 /* SessionTraceDocumentUI.swift */; };
 		09DAC36329C215E400448FCC /* ChordDiagramEditor.lzma in Resources */ = {isa = PBXBuildFile; fileRef = 09DAC36229C215E400448FCC /* ChordDiagramEditor.lzma */; };
+		09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */; };
+		09F0A0032A00000300C831B2 /* StringDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0022A00000300C831B2 /* StringDiff.swift */; };
+		09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0042A00000500C831B2 /* StringDiffUI.swift */; };
+		09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */; };
+		09F0A00C2A00000C00C831B2 /* SwiftUIEx in Frameworks */ = {isa = PBXBuildFile; productRef = 09F0A00D2A00000D00C831B2 /* SwiftUIEx */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,18 +58,19 @@
 		09B2DD5029B8FEDF00C831B2 /* SessionTraceViewerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SessionTraceViewerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B2DD5429B8FEDF00C831B2 /* SessionTraceViewerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceViewerUITests.swift; sourceTree = "<group>"; };
 		09B2DD5629B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceViewerUITestsLaunchTests.swift; sourceTree = "<group>"; };
-			09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorFormatting.swift; sourceTree = "<group>"; };
-			09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspectorView.swift; sourceTree = "<group>"; };
-			09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRow.swift; sourceTree = "<group>"; };
-			09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRowCard.swift; sourceTree = "<group>"; };
-			09F0A0022A00000300C831B2 /* StringDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiff.swift; sourceTree = "<group>"; };
-			09F0A0042A00000500C831B2 /* StringDiffUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffUI.swift; sourceTree = "<group>"; };
-			09B2DD7729B99E8900C831B2 /* TraceViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewer.swift; sourceTree = "<group>"; };
+		09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorFormatting.swift; sourceTree = "<group>"; };
+		09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspectorView.swift; sourceTree = "<group>"; };
+		09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRow.swift; sourceTree = "<group>"; };
+		09B2DD7729B99E8900C831B2 /* TraceViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewer.swift; sourceTree = "<group>"; };
 		09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerUI.swift; sourceTree = "<group>"; };
 		09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewEnvironment.swift; sourceTree = "<group>"; };
 		09B2DD8E29BB946800C831B2 /* SessionTraceDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceDocument.swift; sourceTree = "<group>"; };
 		09B2DD9429BB98C200C831B2 /* SessionTraceDocumentUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceDocumentUI.swift; sourceTree = "<group>"; };
 		09DAC36229C215E400448FCC /* ChordDiagramEditor.lzma */ = {isa = PBXFileReference; lastKnownFileType = file; path = ChordDiagramEditor.lzma; sourceTree = "<group>"; };
+		09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRowCard.swift; sourceTree = "<group>"; };
+		09F0A0022A00000300C831B2 /* StringDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiff.swift; sourceTree = "<group>"; };
+		09F0A0042A00000500C831B2 /* StringDiffUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffUI.swift; sourceTree = "<group>"; };
+		09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffEnv.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +79,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				09B2DD6529B8FF4400C831B2 /* ReducerArchitecture in Frameworks */,
+				09F0A00C2A00000C00C831B2 /* SwiftUIEx in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,15 +122,15 @@
 		};
 		09B2DD3729B8FEDE00C831B2 /* SessionTraceViewer */ = {
 			isa = PBXGroup;
-				children = (
-					09B2DD9629BB98C800C831B2 /* SessionTraceDocument */,
-					09B2DD7629B99E4700C831B2 /* TraceViewer */,
-					09B2DD6629B8FF6700C831B2 /* Inspector */,
-					09F0A0062A00000600C831B2 /* StringDiff */,
-					09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */,
-					09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */,
-					09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */,
-					09B2DD3829B8FEDE00C831B2 /* SessionTraceViewerApp.swift */,
+			children = (
+				09B2DD9629BB98C800C831B2 /* SessionTraceDocument */,
+				09B2DD7629B99E4700C831B2 /* TraceViewer */,
+				09B2DD6629B8FF6700C831B2 /* Inspector */,
+				09F0A0062A00000600C831B2 /* StringDiff */,
+				09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */,
+				09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */,
+				09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */,
+				09B2DD3829B8FEDE00C831B2 /* SessionTraceViewerApp.swift */,
 				09B2DD4129B8FEDF00C831B2 /* SessionTraceViewer.entitlements */,
 				09B2DD3C29B8FEDF00C831B2 /* Assets.xcassets */,
 				09B2DD3E29B8FEDF00C831B2 /* Preview Content */,
@@ -178,15 +182,6 @@
 			path = TraceViewer;
 			sourceTree = "<group>";
 		};
-		09F0A0062A00000600C831B2 /* StringDiff */ = {
-			isa = PBXGroup;
-			children = (
-				09F0A0022A00000300C831B2 /* StringDiff.swift */,
-				09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
-			);
-			path = StringDiff;
-			sourceTree = "<group>";
-		};
 		09B2DD9629BB98C800C831B2 /* SessionTraceDocument */ = {
 			isa = PBXGroup;
 			children = (
@@ -194,6 +189,16 @@
 				09B2DD9429BB98C200C831B2 /* SessionTraceDocumentUI.swift */,
 			);
 			path = SessionTraceDocument;
+			sourceTree = "<group>";
+		};
+		09F0A0062A00000600C831B2 /* StringDiff */ = {
+			isa = PBXGroup;
+			children = (
+				09F0A0022A00000300C831B2 /* StringDiff.swift */,
+				09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */,
+				09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
+			);
+			path = StringDiff;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -214,6 +219,7 @@
 			name = SessionTraceViewer;
 			packageProductDependencies = (
 				09B2DD6429B8FF4400C831B2 /* ReducerArchitecture */,
+				09F0A00D2A00000D00C831B2 /* SwiftUIEx */,
 			);
 			productName = SessionTraceViewer;
 			productReference = 09B2DD3529B8FEDE00C831B2 /* SessionTraceViewer.app */;
@@ -289,6 +295,7 @@
 			mainGroup = 09B2DD2C29B8FEDE00C831B2;
 			packageReferences = (
 				09B2DD6329B8FF4400C831B2 /* XCRemoteSwiftPackageReference "ReducerArchitecture" */,
+				09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */,
 			);
 			productRefGroup = 09B2DD3629B8FEDE00C831B2 /* Products */;
 			projectDirPath = "";
@@ -332,15 +339,16 @@
 		09B2DD3129B8FEDE00C831B2 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-				files = (
-					09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */,
-					09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */,
-					09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */,
-					09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */,
-					09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */,
-					09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */,
-					09B2DD8F29BB946800C831B2 /* SessionTraceDocument.swift in Sources */,
-					09B2DD3929B8FEDE00C831B2 /* SessionTraceViewerApp.swift in Sources */,
+			files = (
+				09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */,
+				09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */,
+				09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */,
+				09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */,
+				09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */,
+				09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */,
+				09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */,
+				09B2DD8F29BB946800C831B2 /* SessionTraceDocument.swift in Sources */,
+				09B2DD3929B8FEDE00C831B2 /* SessionTraceViewerApp.swift in Sources */,
 				09B2DD7A29B99E9400C831B2 /* TraceViewerUI.swift in Sources */,
 				09F0A0032A00000300C831B2 /* StringDiff.swift in Sources */,
 				09B2DD7829B99E8900C831B2 /* TraceViewer.swift in Sources */,
@@ -682,6 +690,14 @@
 				kind = branch;
 			};
 		};
+		09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ilyathewhite/SwiftUIEx.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.7;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -689,7 +705,13 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 09B2DD6329B8FF4400C831B2 /* XCRemoteSwiftPackageReference "ReducerArchitecture" */;
 			productName = ReducerArchitecture;
-		};/* End XCSwiftPackageProductDependency section */
+		};
+		09F0A00D2A00000D00C831B2 /* SwiftUIEx */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */;
+			productName = SwiftUIEx;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 09B2DD2D29B8FEDE00C831B2 /* Project object */;
 }

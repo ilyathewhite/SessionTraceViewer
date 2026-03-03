@@ -6,16 +6,42 @@
 //
 
 import SwiftUI
-
+import SwiftUIEx
 import ReducerArchitecture
+
+private extension StringDiff.PresentationStyle {
+    var isInlineEmbedded: Bool {
+        self == .inlineEmbedded
+    }
+}
+
+private struct StringDiffWindowKeyboardShortcuts: View {
+    let previousDiffDisabled: Bool
+    let nextDiffDisabled: Bool
+    let selectPreviousDiff: () -> Void
+    let selectNextDiff: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button("Previous Diff", action: selectPreviousDiff)
+                .keyboardShortcut(.upArrow, modifiers: [.command])
+                .disabled(previousDiffDisabled)
+
+            Button("Next Diff", action: selectNextDiff)
+                .keyboardShortcut(.downArrow, modifiers: [.command])
+                .disabled(nextDiffDisabled)
+        }
+        .buttonStyle(.plain)
+        .labelsHidden()
+        .accessibilityHidden(true)
+        .frame(width: 0, height: 0)
+        .opacity(0.001)
+    }
+}
 
 private struct StringDiffLineCell: View {
     let line: StringDiff.StoreState.DiffLine?
     let presentationStyle: StringDiff.PresentationStyle
-
-    private var isInlineEmbedded: Bool {
-        presentationStyle == .inlineEmbedded
-    }
 
     private var displayText: AttributedString {
         guard let line else { return AttributedString(" ") }
@@ -24,13 +50,19 @@ private struct StringDiffLineCell: View {
 
     var body: some View {
         Text(displayText)
-            .font(.system(size: isInlineEmbedded ? 11 : 12, weight: .regular, design: .monospaced))
+            .font(
+                .system(
+                    size: presentationStyle.isInlineEmbedded ? 11 : 12,
+                    weight: .regular,
+                    design: .monospaced
+                )
+            )
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, isInlineEmbedded ? 8 : 12)
-        .padding(.vertical, 1)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(lineBackground)
+            .padding(.horizontal, presentationStyle.isInlineEmbedded ? 8 : 12)
+            .padding(.vertical, 1)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(lineBackground)
     }
 
     private var lineBackground: some View {
@@ -73,10 +105,6 @@ private struct StringDiffColumnHeader: View {
     let oldTitle: String
     let newTitle: String
 
-    private var isInlineEmbedded: Bool {
-        presentationStyle == .inlineEmbedded
-    }
-
     var body: some View {
         HStack(spacing: 0) {
             headerCell(title: oldTitle)
@@ -89,13 +117,13 @@ private struct StringDiffColumnHeader: View {
     private func headerCell(title: String) -> some View {
         Text(title)
             .font(
-                isInlineEmbedded
+                presentationStyle.isInlineEmbedded
                     ? .subheadline.smallCaps().weight(.semibold)
                     : .headline.smallCaps().weight(.semibold)
             )
             .foregroundStyle(ViewerTheme.secondaryText)
-            .padding(.horizontal, isInlineEmbedded ? 8 : 12)
-            .padding(.vertical, isInlineEmbedded ? 5 : 6)
+            .padding(.horizontal, presentationStyle.isInlineEmbedded ? 8 : 12)
+            .padding(.vertical, presentationStyle.isInlineEmbedded ? 5 : 6)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -103,24 +131,20 @@ private struct StringDiffColumnHeader: View {
 private struct StringDiffInlineSectionCard: View {
     let section: StringDiff.StoreState.DiffSection
 
-    private var isDiffSection: Bool {
-        section.isDiff
-    }
-
     var body: some View {
         StringDiffSectionRows(
             section: section,
             presentationStyle: .inlineEmbedded
         )
-        .padding(isDiffSection ? 4 : 0)
+        .padding(section.isDiff ? 4 : 0)
         .overlay {
-            if isDiffSection {
+            if section.isDiff {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .stroke(ViewerTheme.sectionStroke, lineWidth: 1)
                     .padding(1)
             }
         }
-        .padding(.vertical, isDiffSection ? 2 : 0)
+        .padding(.vertical, section.isDiff ? 2 : 0)
     }
 }
 
@@ -159,257 +183,223 @@ private struct StringDiffDocumentSection: View {
     }
 }
 
+private struct StringDiffLoadingView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+
+            Text("Preparing diff preview...")
+                .font(.headline)
+                .foregroundStyle(ViewerTheme.secondaryText)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ViewerTheme.sectionBackground)
+    }
+}
+
+private struct StringDiffInlineLoadedView: View {
+    let oldTitle: String
+    let newTitle: String
+    let sections: [StringDiff.StoreState.DiffSection]
+
+    var body: some View {
+        Group {
+            if sections.isEmpty {
+                Text("No Differences")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(ViewerTheme.secondaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            }
+            else {
+                VStack(alignment: .leading, spacing: 0) {
+                    StringDiffColumnHeader(
+                        presentationStyle: .inlineEmbedded,
+                        oldTitle: oldTitle,
+                        newTitle: newTitle
+                    )
+
+                    Divider()
+
+                    ForEach(sections) { section in
+                        StringDiffInlineSectionCard(section: section)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct StringDiffWindowLoadedView: View {
+    @ObservedObject var store: StringDiff.Store
+
+    @FocusState private var hasKeyboardFocus: Bool
+
+    private var sections: [StringDiff.StoreState.DiffSection] {
+        store.state.diffSections.value ?? []
+    }
+
+    private func scrollToSelectedDiff(using proxy: ScrollViewProxy, animated: Bool = true) {
+        guard let selectedDiffID = store.state.selectedDiffID else { return }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                proxy.scrollTo(selectedDiffID, anchor: .center)
+            }
+        }
+        else {
+            proxy.scrollTo(selectedDiffID, anchor: .top)
+        }
+    }
+
+    var body: some View {
+        Group {
+            if sections.isEmpty {
+                ContentUnavailableView(
+                    "No Differences",
+                    systemImage: "checkmark.seal",
+                    description: Text("These values are identical.")
+                )
+            }
+            else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            Divider()
+
+                            StringDiffColumnHeader(
+                                presentationStyle: .standard,
+                                oldTitle: store.state.string1Caption,
+                                newTitle: store.state.string2Caption
+                            )
+
+                            Divider()
+
+                            LazyVStack(spacing: 0) {
+                                ForEach(sections) { section in
+                                    StringDiffDocumentSection(
+                                        section: section,
+                                        isSelected: store.state.selectedDiffID == section.id,
+                                        onSelect: {
+                                            store.send(.mutating(.selectDiff(id: section.id)))
+                                            hasKeyboardFocus = true
+                                        }
+                                    )
+                                    .id(section.id)
+                                }
+                            }
+                            .padding(.top, 8)
+                        }
+                        .padding(.vertical, 12)
+                    }
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            hasKeyboardFocus = true
+                            scrollToSelectedDiff(using: proxy, animated: false)
+                        }
+                    }
+                    .onChange(of: store.state.selectedDiffID) { _, _ in
+                        scrollToSelectedDiff(using: proxy)
+                    }
+                }
+            }
+        }
+        .background(ViewerTheme.sectionBackground)
+        .contentShape(Rectangle())
+        .focusable()
+        .focusEffectDisabled()
+        .focused($hasKeyboardFocus)
+        .onAppear {
+            DispatchQueue.main.async {
+                hasKeyboardFocus = true
+            }
+        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded {
+                    hasKeyboardFocus = true
+                }
+        )
+        .overlay(alignment: .topLeading) {
+            StringDiffWindowKeyboardShortcuts(
+                previousDiffDisabled: store.state.previousDiffDisabled,
+                nextDiffDisabled: store.state.nextDiffDisabled,
+                selectPreviousDiff: {
+                    store.send(.mutating(.selectPreviousDiff))
+                },
+                selectNextDiff: {
+                    store.send(.mutating(.selectNextDiff))
+                }
+            )
+        }
+    }
+}
+
 extension StringDiff: StoreUINamespace {
     struct ContentView: StoreContentView {
         typealias Nsp = StringDiff
         @ObservedObject var store: Store
-        @FocusState private var hasKeyboardFocus: Bool
-        @State private var selectedDiffIndex: Int?
 
         init(_ store: Store) {
             self.store = store
         }
 
-        private var isInlineEmbedded: Bool {
-            store.state.presentationStyle == .inlineEmbedded
-        }
-
-        private var diffHunks: [StoreState.DiffSection] {
-            store.state.diffHunks
-        }
-
-        private var sections: [StoreState.DiffSection] {
-            store.state.sections
-        }
-
-        private var selectedDiffID: String? {
-            guard let selectedDiffIndex, diffHunks.indices.contains(selectedDiffIndex) else { return nil }
-            return diffHunks[selectedDiffIndex].id
-        }
-
         var body: some View {
             Group {
-                if isInlineEmbedded {
-                    inlineDiffContent
-                }
-                else {
-                    windowDiffContent
+                switch store.state.diffSections {
+                case .notStarted, .inProgress:
+                    StringDiffLoadingView()
+
+                case .success(let sections):
+                    switch store.state.presentationStyle {
+                    case .standard:
+                        StringDiffWindowLoadedView(store: store)
+
+                    case .inlineEmbedded:
+                        StringDiffInlineLoadedView(
+                            oldTitle: store.state.string1Caption,
+                            newTitle: store.state.string2Caption,
+                            sections: sections
+                        )
+                    }
+
+                case .failure:
+                    StringDiffLoadingView()
                 }
             }
             .frame(
-                minWidth: isInlineEmbedded ? nil : 860,
-                minHeight: isInlineEmbedded ? nil : 540
+                minWidth: store.state.presentationStyle == .inlineEmbedded ? nil : 860,
+                minHeight: store.state.presentationStyle == .inlineEmbedded ? nil : 540
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(isInlineEmbedded ? Color.clear : ViewerTheme.sectionBackground)
-        }
-
-        private var inlineDiffContent: some View {
-            Group {
-                if sections.isEmpty {
-                    Text("No Differences")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(ViewerTheme.secondaryText)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                }
-                else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        StringDiffColumnHeader(
-                            presentationStyle: .inlineEmbedded,
-                            oldTitle: store.state.string1Caption,
-                            newTitle: store.state.string2Caption
-                        )
-
-                        Divider()
-
-                        ForEach(sections) { section in
-                            StringDiffInlineSectionCard(
-                                section: section
-                            )
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-
-        private var windowDiffContent: some View {
-            Group {
-                if sections.isEmpty {
-                    ContentUnavailableView(
-                        "No Differences",
-                        systemImage: "checkmark.seal",
-                        description: Text("These values are identical.")
-                    )
-                }
-                else {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical) {
-                            VStack(spacing: 0) {
-                                Divider()
-
-                                StringDiffColumnHeader(
-                                    presentationStyle: .standard,
-                                    oldTitle: store.state.string1Caption,
-                                    newTitle: store.state.string2Caption
-                                )
-
-                                Divider()
-
-                                LazyVStack(spacing: 0) {
-                                    ForEach(sections) { section in
-                                        StringDiffDocumentSection(
-                                            section: section,
-                                            isSelected: selectedDiffID == section.id,
-                                            onSelect: {
-                                                guard let index = diffHunks.firstIndex(where: { $0.id == section.id }) else {
-                                                    return
-                                                }
-                                                selectDiff(at: index)
-                                            }
-                                        )
-                                        .id(section.id)
-                                    }
-                                }
-                                .padding(.top, 8)
-                            }
-                            .padding(.vertical, 12)
-                        }
-                        .onAppear {
-                            selectInitialDiffIfNeeded()
-                            DispatchQueue.main.async {
-                                hasKeyboardFocus = true
-                                scrollToSelectedDiff(using: proxy, animated: false)
-                            }
-                        }
-                        .onChange(of: selectedDiffIndex) { _, _ in
-                            scrollToSelectedDiff(using: proxy)
-                        }
-                        .onChange(of: diffHunks.map(\.id)) { _, _ in
-                            validateSelection(using: proxy)
-                        }
-                    }
-                }
-            }
-            .background(ViewerTheme.sectionBackground)
-            .contentShape(Rectangle())
-            .focusable()
-            .focusEffectDisabled()
-            .focused($hasKeyboardFocus)
-            .onAppear {
-                DispatchQueue.main.async {
-                    hasKeyboardFocus = true
-                }
-            }
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded {
-                        hasKeyboardFocus = true
-                    }
+            .background(
+                store.state.presentationStyle == .inlineEmbedded
+                    ? Color.clear
+                    : ViewerTheme.sectionBackground
             )
-            .overlay(alignment: .topLeading) {
-                keyboardShortcuts
-            }
-        }
-
-        private var keyboardShortcuts: some View {
-            VStack(spacing: 0) {
-                Button("Previous Diff") {
-                    selectPreviousDiff()
-                }
-                .keyboardShortcut(.upArrow, modifiers: [.command])
-                .disabled(previousDiffDisabled)
-
-                Button("Next Diff") {
-                    selectNextDiff()
-                }
-                .keyboardShortcut(.downArrow, modifiers: [.command])
-                .disabled(nextDiffDisabled)
-            }
-            .buttonStyle(.plain)
-            .labelsHidden()
-            .accessibilityHidden(true)
-            .frame(width: 0, height: 0)
-            .opacity(0.001)
-        }
-
-        private var previousDiffDisabled: Bool {
-            guard let selectedDiffIndex else { return diffHunks.isEmpty }
-            return selectedDiffIndex <= 0
-        }
-
-        private var nextDiffDisabled: Bool {
-            guard let selectedDiffIndex else { return diffHunks.isEmpty }
-            return selectedDiffIndex >= diffHunks.count - 1
-        }
-
-        private func selectInitialDiffIfNeeded() {
-            guard selectedDiffIndex == nil, !diffHunks.isEmpty else { return }
-            selectedDiffIndex = 0
-        }
-
-        private func selectDiff(at index: Int) {
-            guard diffHunks.indices.contains(index) else { return }
-            selectedDiffIndex = index
-            hasKeyboardFocus = true
-        }
-
-        private func selectPreviousDiff() {
-            guard !diffHunks.isEmpty else { return }
-            guard let selectedDiffIndex else {
-                self.selectedDiffIndex = 0
-                return
-            }
-            self.selectedDiffIndex = max(selectedDiffIndex - 1, 0)
-        }
-
-        private func selectNextDiff() {
-            guard !diffHunks.isEmpty else { return }
-            guard let selectedDiffIndex else {
-                self.selectedDiffIndex = 0
-                return
-            }
-            self.selectedDiffIndex = min(selectedDiffIndex + 1, diffHunks.count - 1)
-        }
-
-        private func validateSelection(using proxy: ScrollViewProxy) {
-            guard !diffHunks.isEmpty else {
-                selectedDiffIndex = nil
-                return
-            }
-            if let selectedDiffIndex, diffHunks.indices.contains(selectedDiffIndex) {
-                scrollToSelectedDiff(using: proxy, animated: false)
-            }
-            else {
-                self.selectedDiffIndex = 0
-            }
-        }
-
-        private func scrollToSelectedDiff(
-            using proxy: ScrollViewProxy,
-            animated: Bool = true
-        ) {
-            guard let selectedDiffIndex, diffHunks.indices.contains(selectedDiffIndex) else { return }
-            let selectedHunkID = diffHunks[selectedDiffIndex].id
-            if animated {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    proxy.scrollTo(selectedHunkID, anchor: .center)
-                }
-            }
-            else {
-                proxy.scrollTo(selectedHunkID, anchor: .top)
+            .connectOnAppear {
+                store.environment = .init(
+                    makeDiffSections: { string1, string2 in
+                        Nsp.StoreState.makeSections(string1: string1, string2: string2)
+                    }
+                )
+                store.send(.mutating(.startLoadingIfNeeded))
             }
         }
     }
 }
 
 struct StringDiffWindowView: View {
-    let request: StringDiff.WindowRequest
+    @StateObject private var store: StringDiff.Store
+
+    init(input: StringDiff.Input) {
+        self._store = StateObject(wrappedValue: StringDiff.windowStore(input: input))
+    }
 
     var body: some View {
-        StringDiff.ContentView(StringDiff.store(windowRequest: request))
-            .navigationTitle(request.title)
+        StringDiff.ContentView(store)
+            .navigationTitle(store.state.title)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(ViewerTheme.sectionBackground)
     }

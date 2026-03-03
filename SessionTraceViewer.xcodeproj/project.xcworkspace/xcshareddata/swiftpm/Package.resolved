@@ -1,5 +1,5 @@
 {
-  "originHash" : "2e75d9bffc521c454564e8476fc51e22359d4a76971630a0425fd8d6f96c3001",
+  "originHash" : "29885d1f988c1154362d5ec4605e92e8b76c4dd6fd0082e99a1f920554dabb61",
   "pins" : [
     {
       "identity" : "asyncnavigation",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ilyathewhite/FoundationEx.git",
       "state" : {
-        "revision" : "c91629973e6c4c54bd1ea47fb635f41e761a9a84",
-        "version" : "1.0.13"
+        "revision" : "9bd512e635ca36401fade05ce47a203f7edddb1d",
+        "version" : "1.0.14"
       }
     },
     {
@@ -38,12 +38,21 @@
       }
     },
     {
+      "identity" : "hammer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/lyft/Hammer.git",
+      "state" : {
+        "revision" : "90af16da2d2756d2d297c005486b88b3e9971803",
+        "version" : "0.18.0"
+      }
+    },
+    {
       "identity" : "reducerarchitecture",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ilyathewhite/ReducerArchitecture.git",
       "state" : {
         "branch" : "main",
-        "revision" : "0c2ef2d078a7f3eeadb53eeb6a950837ce87e891"
+        "revision" : "8b2eee6fbc1c467bec63f6ac797a557b287789f2"
       }
     },
     {
@@ -53,6 +62,15 @@
       "state" : {
         "revision" : "3907a9438f5b57d317001dc99f3f11b46882272b",
         "version" : "0.10.0"
+      }
+    },
+    {
+      "identity" : "swiftuiex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ilyathewhite/SwiftUIEx.git",
+      "state" : {
+        "revision" : "1e05dc49552f97a9767332e66c0b24d15a29f43a",
+        "version" : "1.0.8"
       }
     }
   ],

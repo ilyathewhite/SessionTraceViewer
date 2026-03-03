@@ -303,6 +303,11 @@ struct EventInspectorView: View {
 
     private func presentDiff(for row: InspectorFormatter.ValueRow) {
         guard let change = row.change else { return }
+        let input = StringDiff.input(
+            title: row.property,
+            oldValue: change.oldValue,
+            newValue: change.newValue
+        )
         if shouldPresentDiffInline(change: change) {
             if inlineDiffRowID == row.id {
                 dismissInlineDiff()
@@ -310,14 +315,7 @@ struct EventInspectorView: View {
             else {
                 inlineDiffRowID = row.id
                 inlineStringDiffUI = .init(
-                    StringDiff.store(
-                        title: row.property,
-                        presentationStyle: .inlineEmbedded,
-                        string1Caption: "Old Value",
-                        string1: change.oldValue,
-                        string2Caption: "New Value",
-                        string2: change.newValue
-                    )
+                    StringDiff.inlineStore(input: input)
                 )
             }
         }
@@ -325,13 +323,7 @@ struct EventInspectorView: View {
             dismissInlineDiff()
             openWindow(
                 id: StringDiff.windowID,
-                value: StringDiff.WindowRequest(
-                    title: row.property,
-                    string1Caption: "Old Value",
-                    string1: change.oldValue,
-                    string2Caption: "New Value",
-                    string2: change.newValue
-                )
+                value: input
             )
         }
     }

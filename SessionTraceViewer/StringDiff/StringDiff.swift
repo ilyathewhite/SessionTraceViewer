@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 
+import FoundationEx
 import ReducerArchitecture
 
 enum StringDiff: StoreNamespace {
@@ -15,16 +16,28 @@ enum StringDiff: StoreNamespace {
 
     typealias PublishedValue = Void
 
-    typealias StoreEnvironment = Never
-    typealias EffectAction = Never
-    typealias MutatingAction = Void
+    struct StoreEnvironment {
+        let makeDiffSections: (_ string1: String, _ string2: String) -> [StoreState.DiffSection]
+    }
 
-    enum PresentationStyle {
+    enum MutatingAction {
+        case startLoadingIfNeeded
+        case finishLoading([StoreState.DiffSection])
+        case selectDiff(id: String)
+        case selectPreviousDiff
+        case selectNextDiff
+    }
+
+    enum EffectAction {
+        case loadDiff(string1: String, string2: String)
+    }
+
+    enum PresentationStyle: Sendable {
         case standard
         case inlineEmbedded
     }
 
-    struct WindowRequest: Hashable, Codable {
+    struct Input: Hashable, Codable, Sendable {
         let title: String
         let string1Caption: String
         let string1: String
@@ -32,7 +45,7 @@ enum StringDiff: StoreNamespace {
         let string2: String
     }
 
-    enum DiffSide {
+    enum DiffSide: Sendable {
         case old
         case new
 
@@ -59,7 +72,7 @@ enum StringDiff: StoreNamespace {
         }
     }
 
-    enum DiffLineKind {
+    enum DiffLineKind: Sendable {
         case unchanged
         case old
         case new
@@ -77,21 +90,21 @@ enum StringDiff: StoreNamespace {
     }
 
     struct StoreState {
-        struct DiffLine: Identifiable {
+        struct DiffLine: Identifiable, Sendable {
             let id: String
             let lineNumber: Int?
             let text: AttributedString
             let kind: DiffLineKind
         }
 
-        struct DiffRow: Identifiable {
+        struct DiffRow: Identifiable, Sendable {
             let id: String
             let oldLine: DiffLine?
             let newLine: DiffLine?
         }
 
-        struct DiffSection: Identifiable {
-            enum Kind {
+        struct DiffSection: Identifiable, Sendable {
+            enum Kind: Sendable {
                 case context
                 case diff(index: Int)
             }
@@ -112,304 +125,32 @@ enum StringDiff: StoreNamespace {
             }
         }
 
-        private enum DiffOperation {
-            case equal(oldLineNumber: Int, newLineNumber: Int, text: String)
-            case delete(oldLineNumber: Int, text: String)
-            case insert(newLineNumber: Int, text: String)
-        }
-
         let title: String
         let presentationStyle: PresentationStyle
         let string1Caption: String
+        let string1: String
         let string2Caption: String
-        let sections: [DiffSection]
+        let string2: String
+        var diffSections: AsyncTaskValue<[DiffSection], Never>
+        var selectedDiffIndex: Int?
 
         var diffHunks: [DiffSection] {
-            sections.filter(\.isDiff)
+            diffSections.value?.filter(\.isDiff) ?? []
         }
 
-        private static func plainAttributedString(for string: String) -> AttributedString {
-            var attributedString = AttributedString(string)
-            if attributedString.startIndex != attributedString.endIndex {
-                let fullRange = attributedString.startIndex..<attributedString.endIndex
-                attributedString[fullRange].foregroundColor = ViewerTheme.primaryText
-            }
-            return attributedString
+        var selectedDiffID: String? {
+            guard let selectedDiffIndex, diffHunks.indices.contains(selectedDiffIndex) else { return nil }
+            return diffHunks[selectedDiffIndex].id
         }
 
-        private static func diffAttributedString(
-            for string: String,
-            comparedTo otherString: String,
-            side: DiffSide
-        ) -> AttributedString {
-            var attributedString = plainAttributedString(for: string)
-
-            let diffFromOther = otherString.difference(from: string)
-            for removal in diffFromOther.removals {
-                guard case .remove(offset: let offset, element: _, associatedWith: _) = removal else {
-                    assertionFailure()
-                    continue
-                }
-
-                let index = attributedString.index(
-                    attributedString.startIndex,
-                    offsetByCharacters: offset
-                )
-                attributedString[index...index].backgroundColor = side.highlightBackground
-                attributedString[index...index].foregroundColor = side.highlightText
-            }
-            return attributedString
+        var previousDiffDisabled: Bool {
+            guard let selectedDiffIndex else { return diffHunks.isEmpty }
+            return selectedDiffIndex <= 0
         }
 
-        private static func splitLines(_ string: String) -> [String] {
-            guard !string.isEmpty else { return [] }
-            return string.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        }
-
-        private static func diffOperations(
-            oldLines: [String],
-            newLines: [String]
-        ) -> [DiffOperation] {
-            let rowStride = newLines.count + 1
-            func tableIndex(_ row: Int, _ column: Int) -> Int {
-                row * rowStride + column
-            }
-
-            var lcs = Array(
-                repeating: 0,
-                count: (oldLines.count + 1) * (newLines.count + 1)
-            )
-
-            if !oldLines.isEmpty, !newLines.isEmpty {
-                for oldIndex in stride(from: oldLines.count - 1, through: 0, by: -1) {
-                    for newIndex in stride(from: newLines.count - 1, through: 0, by: -1) {
-                        let currentIndex = tableIndex(oldIndex, newIndex)
-                        if oldLines[oldIndex] == newLines[newIndex] {
-                            lcs[currentIndex] = lcs[tableIndex(oldIndex + 1, newIndex + 1)] + 1
-                        }
-                        else {
-                            lcs[currentIndex] = max(
-                                lcs[tableIndex(oldIndex + 1, newIndex)],
-                                lcs[tableIndex(oldIndex, newIndex + 1)]
-                            )
-                        }
-                    }
-                }
-            }
-
-            var operations: [DiffOperation] = []
-            var oldIndex = 0
-            var newIndex = 0
-            var oldLineNumber = 1
-            var newLineNumber = 1
-
-            while oldIndex < oldLines.count || newIndex < newLines.count {
-                if oldIndex < oldLines.count,
-                    newIndex < newLines.count,
-                    oldLines[oldIndex] == newLines[newIndex]
-                {
-                    operations.append(
-                        .equal(
-                            oldLineNumber: oldLineNumber,
-                            newLineNumber: newLineNumber,
-                            text: oldLines[oldIndex]
-                        )
-                    )
-                    oldIndex += 1
-                    newIndex += 1
-                    oldLineNumber += 1
-                    newLineNumber += 1
-                }
-                else if newIndex == newLines.count
-                    || (
-                        oldIndex < oldLines.count
-                            && lcs[tableIndex(oldIndex + 1, newIndex)]
-                                >= lcs[tableIndex(oldIndex, newIndex + 1)]
-                    )
-                {
-                    operations.append(
-                        .delete(oldLineNumber: oldLineNumber, text: oldLines[oldIndex])
-                    )
-                    oldIndex += 1
-                    oldLineNumber += 1
-                }
-                else {
-                    operations.append(
-                        .insert(newLineNumber: newLineNumber, text: newLines[newIndex])
-                    )
-                    newIndex += 1
-                    newLineNumber += 1
-                }
-            }
-
-            return operations
-        }
-
-        private static func lineRangeLabel(_ lineNumbers: [Int]) -> String {
-            guard let first = lineNumbers.first, let last = lineNumbers.last else {
-                return "No lines"
-            }
-            if first == last {
-                return "L\(first)"
-            }
-            return "L\(first)-\(last)"
-        }
-
-        private static func makeContextSection(
-            from operations: [DiffOperation],
-            index: Int
-        ) -> DiffSection {
-            let equalLines = operations.compactMap { operation -> (Int, Int, String)? in
-                guard case .equal(let oldLineNumber, let newLineNumber, let text) = operation else {
-                    return nil
-                }
-                return (oldLineNumber, newLineNumber, text)
-            }
-
-            let rows = equalLines.map { oldLineNumber, newLineNumber, text in
-                DiffRow(
-                    id: "context-\(index)-\(oldLineNumber)-\(newLineNumber)",
-                    oldLine: DiffLine(
-                        id: "context-old-\(index)-\(oldLineNumber)",
-                        lineNumber: oldLineNumber,
-                        text: plainAttributedString(for: text),
-                        kind: .unchanged
-                    ),
-                    newLine: DiffLine(
-                        id: "context-new-\(index)-\(newLineNumber)",
-                        lineNumber: newLineNumber,
-                        text: plainAttributedString(for: text),
-                        kind: .unchanged
-                    )
-                )
-            }
-
-            return DiffSection(
-                id: "context-\(index)",
-                kind: .context,
-                oldRangeLabel: lineRangeLabel(equalLines.map(\.0)),
-                newRangeLabel: lineRangeLabel(equalLines.map(\.1)),
-                rows: rows
-            )
-        }
-
-        private static func makeDiffSection(
-            from operations: [DiffOperation],
-            index: Int
-        ) -> DiffSection {
-            let oldLines = operations.compactMap { operation -> (Int, String)? in
-                guard case .delete(let lineNumber, let text) = operation else { return nil }
-                return (lineNumber, text)
-            }
-            let newLines = operations.compactMap { operation -> (Int, String)? in
-                guard case .insert(let lineNumber, let text) = operation else { return nil }
-                return (lineNumber, text)
-            }
-
-            let rowCount = max(oldLines.count, newLines.count)
-            let rows = (0..<rowCount).map { rowIndex in
-                let oldLine = oldLines.indices.contains(rowIndex) ? oldLines[rowIndex] : nil
-                let newLine = newLines.indices.contains(rowIndex) ? newLines[rowIndex] : nil
-
-                return DiffRow(
-                    id: "\(index)-\(rowIndex)",
-                    oldLine: oldLine.map { lineNumber, text in
-                        DiffLine(
-                            id: "old-\(index)-\(lineNumber)",
-                            lineNumber: lineNumber,
-                            text: diffAttributedString(
-                                for: text,
-                                comparedTo: newLine?.1 ?? "",
-                                side: .old
-                            ),
-                            kind: .old
-                        )
-                    },
-                    newLine: newLine.map { lineNumber, text in
-                        DiffLine(
-                            id: "new-\(index)-\(lineNumber)",
-                            lineNumber: lineNumber,
-                            text: diffAttributedString(
-                                for: text,
-                                comparedTo: oldLine?.1 ?? "",
-                                side: .new
-                            ),
-                            kind: .new
-                        )
-                    }
-                )
-            }
-
-            return DiffSection(
-                id: "diff-\(index)",
-                kind: .diff(index: index),
-                oldRangeLabel: lineRangeLabel(oldLines.map(\.0)),
-                newRangeLabel: lineRangeLabel(newLines.map(\.0)),
-                rows: rows
-            )
-        }
-
-        private static func sections(string1: String, string2: String) -> [DiffSection] {
-            let operations = diffOperations(
-                oldLines: splitLines(string1),
-                newLines: splitLines(string2)
-            )
-
-            var sections: [DiffSection] = []
-            var pendingContextOperations: [DiffOperation] = []
-            var pendingDiffOperations: [DiffOperation] = []
-            var contextIndex = 0
-            var diffIndex = 0
-
-            for operation in operations {
-                switch operation {
-                case .equal:
-                    if !pendingDiffOperations.isEmpty {
-                        diffIndex += 1
-                        sections.append(
-                            makeDiffSection(
-                                from: pendingDiffOperations,
-                                index: diffIndex
-                            )
-                        )
-                        pendingDiffOperations.removeAll(keepingCapacity: true)
-                    }
-                    pendingContextOperations.append(operation)
-                case .delete, .insert:
-                    if !pendingContextOperations.isEmpty {
-                        contextIndex += 1
-                        sections.append(
-                            makeContextSection(
-                                from: pendingContextOperations,
-                                index: contextIndex
-                            )
-                        )
-                        pendingContextOperations.removeAll(keepingCapacity: true)
-                    }
-                    pendingDiffOperations.append(operation)
-                }
-            }
-
-            if !pendingDiffOperations.isEmpty {
-                diffIndex += 1
-                sections.append(
-                    makeDiffSection(
-                        from: pendingDiffOperations,
-                        index: diffIndex
-                    )
-                )
-            }
-            else if !pendingContextOperations.isEmpty {
-                contextIndex += 1
-                sections.append(
-                    makeContextSection(
-                        from: pendingContextOperations,
-                        index: contextIndex
-                    )
-                )
-            }
-
-            return sections
+        var nextDiffDisabled: Bool {
+            guard let selectedDiffIndex else { return diffHunks.isEmpty }
+            return selectedDiffIndex >= diffHunks.count - 1
         }
 
         init(
@@ -418,14 +159,56 @@ enum StringDiff: StoreNamespace {
             string1Caption: String,
             string1: String,
             string2Caption: String,
-            string2: String
+            string2: String,
+            diffSections: AsyncTaskValue<[DiffSection], Never>? = nil,
+            selectedDiffIndex: Int? = nil
         ) {
             self.title = title
             self.presentationStyle = presentationStyle
             self.string1Caption = string1Caption
+            self.string1 = string1
             self.string2Caption = string2Caption
+            self.string2 = string2
+            self.diffSections = diffSections
+                ?? .success(Self.makeSections(string1: string1, string2: string2))
+            self.selectedDiffIndex = selectedDiffIndex
+            normalizeSelectedDiffIndex()
+        }
 
-            self.sections = Self.sections(string1: string1, string2: string2)
+        mutating func normalizeSelectedDiffIndex() {
+            selectedDiffIndex = normalizedSelectedDiffIndex
+        }
+
+        mutating func selectDiff(id: String) {
+            guard let index = diffHunks.firstIndex(where: { $0.id == id }) else { return }
+            selectedDiffIndex = index
+        }
+
+        mutating func selectPreviousDiff() {
+            selectedDiffIndex = previousSelectedDiffIndex
+        }
+
+        mutating func selectNextDiff() {
+            selectedDiffIndex = nextSelectedDiffIndex
+        }
+
+        private var normalizedSelectedDiffIndex: Int? {
+            guard !diffHunks.isEmpty else { return nil }
+            guard let selectedDiffIndex else { return 0 }
+            guard diffHunks.indices.contains(selectedDiffIndex) else { return 0 }
+            return selectedDiffIndex
+        }
+
+        private var previousSelectedDiffIndex: Int? {
+            guard !diffHunks.isEmpty else { return nil }
+            guard let selectedDiffIndex else { return 0 }
+            return max(selectedDiffIndex - 1, 0)
+        }
+
+        private var nextSelectedDiffIndex: Int? {
+            guard !diffHunks.isEmpty else { return nil }
+            guard let selectedDiffIndex else { return 0 }
+            return min(selectedDiffIndex + 1, diffHunks.count - 1)
         }
     }
 }
@@ -433,35 +216,59 @@ enum StringDiff: StoreNamespace {
 extension StringDiff {
     @MainActor
     static func store(
-        title: String,
+        input: Input,
         presentationStyle: PresentationStyle = .standard,
-        string1Caption: String,
-        string1: String,
-        string2Caption: String,
-        string2: String
+        diffSections: AsyncTaskValue<[StoreState.DiffSection], Never>? = nil
     ) -> Store {
         Store(
             .init(
-                title: title,
+                title: input.title,
                 presentationStyle: presentationStyle,
-                string1Caption: string1Caption,
-                string1: string1,
-                string2Caption: string2Caption,
-                string2: string2
+                string1Caption: input.string1Caption,
+                string1: input.string1,
+                string2Caption: input.string2Caption,
+                string2: input.string2,
+                diffSections: diffSections
             ),
             env: nil
         )
     }
 
     @MainActor
-    static func store(windowRequest: WindowRequest) -> Store {
-        store(
-            title: windowRequest.title,
-            presentationStyle: .standard,
-            string1Caption: windowRequest.string1Caption,
-            string1: windowRequest.string1,
-            string2Caption: windowRequest.string2Caption,
-            string2: windowRequest.string2
-        )
+    static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
+        switch action {
+        case .startLoadingIfNeeded:
+            guard case .notStarted = state.diffSections else { return .none }
+            state.diffSections = .inProgress
+            return .action(.effect(.loadDiff(string1: state.string1, string2: state.string2)))
+
+        case .finishLoading(let sections):
+            state.diffSections = .success(sections)
+            state.normalizeSelectedDiffIndex()
+            return .none
+
+        case .selectDiff(let id):
+            state.selectDiff(id: id)
+            return .none
+
+        case .selectPreviousDiff:
+            state.selectPreviousDiff()
+            return .none
+
+        case .selectNextDiff:
+            state.selectNextDiff()
+            return .none
+        }
+    }
+
+    @MainActor
+    static func runEffect(_ env: StoreEnvironment, _ state: StoreState, _ action: EffectAction) -> Store.Effect {
+        switch action {
+        case .loadDiff(let string1, let string2):
+            return .asyncAction {
+                async let sections = env.makeDiffSections(string1, string2)
+                return .mutating(.finishLoading(await sections))
+            }
+        }
     }
 }
