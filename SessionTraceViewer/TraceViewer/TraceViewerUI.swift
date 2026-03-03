@@ -163,14 +163,18 @@ private struct TimelineOverviewView: View {
     private let tooltipMaxWidth: CGFloat = 240
     @State private var hoveredNodeID: String?
 
+    private var maxColumn: Int {
+        nodes.map(\.column).max() ?? 0
+    }
+
     private var laneCount: Int {
         let visibleMaxLane = nodes.map { $0.lane }.max() ?? maxLane
         return max(visibleMaxLane + 1, 1)
     }
 
     private var graphWidth: CGFloat {
-        guard nodes.count > 1 else { return graphInset * 2 + 1 }
-        return graphInset * 2 + CGFloat(nodes.count - 1) * nodeSpacing
+        guard maxColumn > 0 else { return graphInset * 2 + 1 }
+        return graphInset * 2 + CGFloat(maxColumn) * nodeSpacing
     }
 
     private var graphHeight: CGFloat {
@@ -206,11 +210,11 @@ private struct TimelineOverviewView: View {
                 drawGraph(context: &context, size: size)
             }
 
-            ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
+            ForEach(nodes, id: \.id) { node in
                 Circle()
                     .fill(Color.white.opacity(0.001))
                     .frame(width: nodeHitArea, height: nodeHitArea)
-                    .position(point(for: index, lane: node.lane))
+                    .position(point(for: node))
                     .id(node.id)
                     .onTapGesture {
                         onSelectNode(node.id)
@@ -230,7 +234,7 @@ private struct TimelineOverviewView: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { gesture in
-                    guard let id = nodeID(at: gesture.location.x) else { return }
+                    guard let id = nodeID(at: gesture.location) else { return }
                     if id != selectedNodeID {
                         onSelectNode(id)
                     }
@@ -248,13 +252,13 @@ private struct TimelineOverviewView: View {
 
     private var hoveredTooltip: (text: String, position: CGPoint)? {
         guard let hoveredNodeID,
-              let index = nodes.firstIndex(where: { $0.id == hoveredNodeID }),
+              let node = nodes.first(where: { $0.id == hoveredNodeID }),
               let text = tooltipTextByNodeID[hoveredNodeID],
               !text.isEmpty else {
             return nil
         }
 
-        let nodePoint = point(for: index, lane: nodes[index].lane)
+        let nodePoint = point(for: node)
         let xPadding = tooltipMaxWidth / 2 + 10
         let clampedX = min(max(nodePoint.x, xPadding), max(graphWidth - xPadding, xPadding))
         let y = max(16, nodePoint.y - 22)
@@ -266,10 +270,10 @@ private struct TimelineOverviewView: View {
         proxy.scrollTo(selectedNodeID)
     }
 
-    private func point(for index: Int, lane: Int) -> CGPoint {
+    private func point(for node: TraceViewer.StoreState.OverviewGraphNode) -> CGPoint {
         CGPoint(
-            x: graphInset + CGFloat(index) * nodeSpacing,
-            y: graphHeight - graphInset - CGFloat(max(lane, 0)) * laneSpacing
+            x: graphInset + CGFloat(node.column) * nodeSpacing,
+            y: graphHeight - graphInset - CGFloat(max(node.lane, 0)) * laneSpacing
         )
     }
 
@@ -285,6 +289,7 @@ private struct TimelineOverviewView: View {
         guard !nodes.isEmpty, size.width > 0, size.height > 0 else { return }
 
         let indexByID = Dictionary(uniqueKeysWithValues: nodes.enumerated().map { ($1.id, $0) })
+        let nodeByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         let guideStartX = graphInset
         let guideEndX = graphWidth - graphInset
 
@@ -302,13 +307,13 @@ private struct TimelineOverviewView: View {
         )
 
         for (index, node) in nodes.enumerated() {
-            let toPoint = point(for: index, lane: node.lane)
+            let toPoint = point(for: node)
             for predecessorID in node.predecessorIDs {
                 guard let fromIndex = indexByID[predecessorID], fromIndex < index else { continue }
-                let fromNode = nodes[fromIndex]
+                guard let fromNode = nodeByID[predecessorID] else { continue }
                 let fromLane = fromNode.lane
                 let toLane = node.lane
-                let fromPoint = point(for: fromIndex, lane: fromLane)
+                let fromPoint = point(for: fromNode)
                 let lineKind = node.edgeLineKindByPredecessorID[predecessorID] ?? .solid
                 let strokeStyle: StrokeStyle = {
                     switch lineKind {
@@ -331,13 +336,16 @@ private struct TimelineOverviewView: View {
                         return ViewerTheme.dottedBranchLine
                     }
                 }()
-                if fromLane == toLane, index - fromIndex > 1 {
+                if fromLane == toLane, toPoint.x - fromPoint.x > nodeSpacing {
                     // Avoid drawing long same-lane lines through unrelated nodes.
                     // We cut tiny gaps around intermediate nodes on the same lane.
                     let intermediateIndices = (fromIndex + 1)..<index
                     let blockerXs = intermediateIndices.compactMap { midIndex -> CGFloat? in
-                        guard nodes[midIndex].lane == fromLane else { return nil }
-                        return point(for: midIndex, lane: fromLane).x
+                        let blockerNode = nodes[midIndex]
+                        guard blockerNode.lane == fromLane else { return nil }
+                        let blockerPoint = point(for: blockerNode)
+                        guard blockerPoint.x > fromPoint.x, blockerPoint.x < toPoint.x else { return nil }
+                        return blockerPoint.x
                     }
                     if blockerXs.isEmpty {
                         let directPath = Path { path in
@@ -397,8 +405,8 @@ private struct TimelineOverviewView: View {
             }
         }
 
-        for (index, node) in nodes.enumerated() {
-            let center = point(for: index, lane: node.lane)
+        for node in nodes {
+            let center = point(for: node)
             let selected = node.id == selectedNodeID
             let radius = nodeRadius(selected: selected)
             let fillColor = color(for: node.colorKind)
@@ -429,15 +437,29 @@ private struct TimelineOverviewView: View {
         }
     }
 
-    private func nodeID(at x: CGFloat) -> String? {
+    private func nodeID(at location: CGPoint) -> String? {
         guard !nodes.isEmpty else { return nil }
         let localX = min(
-            max(x - graphInset, 0),
-            CGFloat(max(nodes.count - 1, 0)) * nodeSpacing
+            max(location.x - graphInset, 0),
+            CGFloat(maxColumn) * nodeSpacing
         )
-        let rawIndex = Int((localX / nodeSpacing).rounded())
-        let index = min(max(rawIndex, 0), nodes.count - 1)
-        return nodes[index].id
+        let rawColumn = Int((localX / nodeSpacing).rounded())
+        let targetColumn = nodes.min { lhs, rhs in
+            abs(lhs.column - rawColumn) < abs(rhs.column - rawColumn)
+        }?.column
+        guard let targetColumn else { return nil }
+
+        return nodes
+            .filter { $0.column == targetColumn }
+            .min { lhs, rhs in
+                let leftDistance = abs(point(for: lhs).y - location.y)
+                let rightDistance = abs(point(for: rhs).y - location.y)
+                if leftDistance == rightDistance {
+                    return lhs.lane < rhs.lane
+                }
+                return leftDistance < rightDistance
+            }?
+            .id
     }
 
     private func hoveredNodeID(at location: CGPoint) -> String? {
@@ -446,8 +468,8 @@ private struct TimelineOverviewView: View {
         let hoverRadius = nodeHitArea / 2
         var bestMatch: (id: String, distanceSquared: CGFloat)?
 
-        for (index, node) in nodes.enumerated() {
-            let center = point(for: index, lane: node.lane)
+        for node in nodes {
+            let center = point(for: node)
             let dx = center.x - location.x
             let dy = center.y - location.y
             let distanceSquared = dx * dx + dy * dy

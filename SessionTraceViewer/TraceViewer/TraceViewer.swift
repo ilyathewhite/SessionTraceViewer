@@ -105,6 +105,7 @@ enum TraceViewer: StoreNamespace {
             let id: String
             let kind: Kind
             let colorKind: EventColorKind
+            let column: Int
             let lane: Int
             let predecessorIDs: [String]
             let edgeLineKindByPredecessorID: [String: EdgeLineKind]
@@ -116,6 +117,7 @@ enum TraceViewer: StoreNamespace {
             let laneByID: [String: Int]
             let predecessorIDsByID: [String: [String]]
             let edgeLineKindByPredecessorID: [String: [String: EdgeLineKind]]
+            let sharedColumnAnchorByID: [String: String]
             let maxLane: Int
         }
 
@@ -325,6 +327,7 @@ enum TraceViewer: StoreNamespace {
                 laneByTimelineID: commitGraphLayout.laneByID,
                 predecessorIDsByTimelineID: commitGraphLayout.predecessorIDsByID,
                 edgeLineKindByPredecessorID: commitGraphLayout.edgeLineKindByPredecessorID,
+                sharedColumnAnchorByID: commitGraphLayout.sharedColumnAnchorByID,
                 maxTimelineLane: commitGraphLayout.maxLane
             )
             self.overviewGraphNodes = overviewGraphPresentation.nodes
@@ -721,6 +724,7 @@ enum TraceViewer: StoreNamespace {
             var startedEffectsByActionID: [String: [SessionGraph.StartedEffectEdge]] = [:]
             var startedActionByEffectID: [String: String] = [:]
             var emittedEdgesByEffectID: [String: [SessionGraph.EmittedActionEdge]] = [:]
+            var childNodeIDsByBatchID: [String: [String]] = [:]
             var inputStateByMutatingActionID: [String: String] = [:]
             var resultActionByStateID: [String: String] = [:]
             var mutatingActionIDs: Set<String> = []
@@ -736,6 +740,8 @@ enum TraceViewer: StoreNamespace {
                 case .emittedAction(let emitted):
                     effectEmitterByNodeID[emitted.nodeID] = emitted.effectID.rawValue
                     emittedEdgesByEffectID[emitted.effectID.rawValue, default: []].append(emitted)
+                case .contains(let contains):
+                    childNodeIDsByBatchID[contains.batchID.rawValue, default: []].append(contains.nodeID)
                 case .stateInput(let stateInput):
                     inputStateByMutatingActionID[stateInput.actionID.rawValue] = stateInput.stateID.rawValue
                 case .stateResult(let stateResult):
@@ -891,10 +897,47 @@ enum TraceViewer: StoreNamespace {
                 lastIndexByEffectID[effectID] = max(existingLast, startIndex)
             }
 
+            let syncScheduledEffectActionIDsByBatchID: [String: [String]] = itemsByID.reduce(
+                into: [:]
+            ) { partialResult, pair in
+                guard case .batch(let batch) = pair.value.node,
+                      batch.kind == .syncFanOut else {
+                    return
+                }
+
+                let effectActionIDs = (childNodeIDsByBatchID[pair.key] ?? []).filter { childID in
+                    guard let childItem = itemsByID[childID],
+                          case .action(let action) = childItem.node else {
+                        return false
+                    }
+                    return action.kind == .effect
+                }
+                guard effectActionIDs.count > 1 else { return }
+                partialResult[pair.key] = effectActionIDs
+            }
+
+            var groupedStartIndexByEffectID: [String: Int] = [:]
+            var groupedStartRankByEffectID: [String: Int] = [:]
+            var sharedColumnAnchorByID: [String: String] = [:]
+            for (batchID, actionIDs) in syncScheduledEffectActionIDsByBatchID {
+                guard let batchIndex = orderedIDs.firstIndex(of: batchID) else { continue }
+                for (rank, actionID) in actionIDs.enumerated() {
+                    sharedColumnAnchorByID[actionID] = batchID
+                    guard let effectID = resolveBranchEffectID(for: actionID) else { continue }
+                    groupedStartIndexByEffectID[effectID] = batchIndex
+                    groupedStartRankByEffectID[effectID] = rank
+                }
+            }
+
             let effectIDsByStartOrder = firstIndexByEffectID.keys.sorted { lhs, rhs in
-                let leftIndex = firstIndexByEffectID[lhs] ?? .max
-                let rightIndex = firstIndexByEffectID[rhs] ?? .max
+                let leftIndex = groupedStartIndexByEffectID[lhs] ?? firstIndexByEffectID[lhs] ?? .max
+                let rightIndex = groupedStartIndexByEffectID[rhs] ?? firstIndexByEffectID[rhs] ?? .max
                 if leftIndex == rightIndex {
+                    let leftRank = groupedStartRankByEffectID[lhs] ?? .max
+                    let rightRank = groupedStartRankByEffectID[rhs] ?? .max
+                    if leftRank != rightRank {
+                        return leftRank < rightRank
+                    }
                     return lhs < rhs
                 }
                 return leftIndex < rightIndex
@@ -906,7 +949,7 @@ enum TraceViewer: StoreNamespace {
             var maxLane = 0
 
             for effectID in effectIDsByStartOrder {
-                let startIndex = firstIndexByEffectID[effectID] ?? .max
+                let startIndex = groupedStartIndexByEffectID[effectID] ?? firstIndexByEffectID[effectID] ?? .max
 
                 let expiredEffects = activeLaneByEffectID.keys.filter { activeEffectID in
                     (lastIndexByEffectID[activeEffectID] ?? .max) < startIndex
@@ -950,7 +993,7 @@ enum TraceViewer: StoreNamespace {
                     let nodeIndex = indexByNodeID[id] ?? 0
                     var occupiedLanes: Set<Int> = []
                     for (effectID, lane) in laneByEffectID {
-                        guard let firstIndex = firstIndexByEffectID[effectID],
+                        guard let firstIndex = groupedStartIndexByEffectID[effectID] ?? firstIndexByEffectID[effectID],
                               let lastIndex = lastIndexByEffectID[effectID] else { continue }
                         guard firstIndex <= nodeIndex && nodeIndex <= lastIndex else { continue }
                         occupiedLanes.insert(lane)
@@ -1191,6 +1234,7 @@ enum TraceViewer: StoreNamespace {
                 laneByID: laneByID,
                 predecessorIDsByID: predecessorIDsByID,
                 edgeLineKindByPredecessorID: edgeLineKindByPredecessorID,
+                sharedColumnAnchorByID: sharedColumnAnchorByID,
                 maxLane: max(maxLane, 0)
             )
         }
@@ -1201,6 +1245,7 @@ enum TraceViewer: StoreNamespace {
             laneByTimelineID: [String: Int],
             predecessorIDsByTimelineID: [String: [String]],
             edgeLineKindByPredecessorID: [String: [String: EdgeLineKind]],
+            sharedColumnAnchorByID: [String: String],
             maxTimelineLane: Int
         ) -> OverviewGraphPresentation {
             var graphLaneByTimelineID = laneByTimelineID.mapValues { max($0, 1) }
@@ -1219,7 +1264,9 @@ enum TraceViewer: StoreNamespace {
             nodes.reserveCapacity(orderedTimelineIDs.count)
             var nodeByID: [String: OverviewGraphNode] = [:]
             var graphIDByTimelineID: [String: String] = [:]
+            var columnByTimelineID: [String: Int] = [:]
             var maxLane = max(maxTimelineLane, 0)
+            var nextColumn = 0
 
             for timelineID in orderedTimelineIDs {
                 guard let item = itemsByID[timelineID] else { continue }
@@ -1238,6 +1285,16 @@ enum TraceViewer: StoreNamespace {
                     }
                 }()
 
+                let column: Int = {
+                    if let anchorID = sharedColumnAnchorByID[timelineID],
+                       let anchorColumn = columnByTimelineID[anchorID] {
+                        return anchorColumn + 1
+                    }
+                    return nextColumn
+                }()
+                columnByTimelineID[timelineID] = column
+                nextColumn = max(nextColumn, column + 1)
+
                 let lane: Int = {
                     if case .state = item.node { return 0 }
                     return max(graphLaneByTimelineID[timelineID] ?? 1, 1)
@@ -1248,6 +1305,7 @@ enum TraceViewer: StoreNamespace {
                     id: timelineID,
                     kind: kind,
                     colorKind: item.colorKind,
+                    column: column,
                     lane: lane,
                     predecessorIDs: (predecessorIDsByTimelineID[timelineID] ?? [])
                         .filter { knownGraphNodeIDs.contains($0) }

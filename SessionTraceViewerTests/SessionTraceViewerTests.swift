@@ -21,6 +21,25 @@ private enum TestTraceFeature: StoreNamespace {
     }
 }
 
+private enum SyncScheduledEffectsFeature: StoreNamespace {
+    typealias PublishedValue = Void
+
+    struct StoreEnvironment {}
+
+    enum MutatingAction {
+        case scheduleEffects
+    }
+
+    enum EffectAction {
+        case startAlpha
+        case startBeta
+    }
+
+    struct StoreState {
+        var startedEffects: [String] = []
+    }
+}
+
 private extension TestTraceFeature {
     @MainActor
     static func store() -> Store {
@@ -42,6 +61,35 @@ private extension TestTraceFeature {
     @MainActor
     static func runEffect(_ env: StoreEnvironment, _ state: StoreState, _ action: EffectAction) -> Store.Effect {
         .none
+    }
+}
+
+private extension SyncScheduledEffectsFeature {
+    @MainActor
+    static func store() -> Store {
+        Store(.init(), env: .init())
+    }
+
+    @MainActor
+    static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
+        switch action {
+        case .scheduleEffects:
+            return .actions([
+                .effect(.startAlpha),
+                .effect(.startBeta)
+            ])
+        }
+    }
+
+    @MainActor
+    static func runEffect(_ env: StoreEnvironment, _ state: StoreState, _ action: EffectAction) -> Store.Effect {
+        switch action {
+        case .startAlpha, .startBeta:
+            return .asyncAction {
+                try? await Task.sleep(for: .milliseconds(20))
+                return .none
+            }
+        }
     }
 }
 
@@ -218,6 +266,51 @@ final class SessionTraceViewerTests: XCTestCase {
 
         XCTAssertEqual(state.selectedID, collapsibleID)
         XCTAssertTrue(state.collapsedIDs.contains(collapsibleID))
+    }
+
+    func testSyncScheduledEffectActionsShareOverviewColumn() async throws {
+        let state = try await makeStateFromSyncScheduledEffectsTrace()
+
+        guard let alphaAction = overviewEffectActionNode(
+            named: "startAlpha",
+            in: state
+        ), let betaAction = overviewEffectActionNode(
+            named: "startBeta",
+            in: state
+        ) else {
+            throw XCTSkip("Expected sync scheduled effect actions were not present in the overview graph.")
+        }
+
+        XCTAssertEqual(
+            alphaAction.column,
+            betaAction.column,
+            "Sync-scheduled sibling effect actions should align vertically in the same overview column."
+        )
+    }
+
+    func testSyncScheduledEffectActionsUseDistinctLanesBottomToTop() async throws {
+        let state = try await makeStateFromSyncScheduledEffectsTrace()
+
+        guard let alphaAction = overviewEffectActionNode(
+            named: "startAlpha",
+            in: state
+        ), let betaAction = overviewEffectActionNode(
+            named: "startBeta",
+            in: state
+        ) else {
+            throw XCTSkip("Expected sync scheduled effect actions were not present in the overview graph.")
+        }
+
+        XCTAssertNotEqual(
+            alphaAction.lane,
+            betaAction.lane,
+            "Sync-scheduled sibling effect actions should not share an overview lane."
+        )
+        XCTAssertLessThan(
+            alphaAction.lane,
+            betaAction.lane,
+            "Sibling sync effect actions should stack bottom-to-top in batch order."
+        )
     }
 
     func testRecordMeetingTimerEffectKeepsOneLaneForItsMutatingActions() throws {
@@ -933,6 +1026,23 @@ final class SessionTraceViewerTests: XCTestCase {
         return TraceViewer.StoreState(traceCollection: collection)
     }
 
+    private func makeStateFromSyncScheduledEffectsTrace() async throws -> TraceViewer.StoreState {
+        let name = "SessionTraceViewerSyncEffects-\(UUID().uuidString)"
+        let store = SyncScheduledEffectsFeature.store()
+        store.logConfig.sessionTraceFilename = name
+
+        let task = store.send(.mutating(.scheduleEffects))
+        await task?.value
+        store.saveSessionTraceIfNeeded()
+
+        let traceURL = try savedTraceURL(named: name)
+        defer { try? FileManager.default.removeItem(at: traceURL) }
+
+        let data = try Data(contentsOf: traceURL)
+        let collection = try SessionTraceCollection(fileData: data)
+        return TraceViewer.StoreState(traceCollection: collection)
+    }
+
     private func makeStateFromRecordMeetingTrace() throws -> TraceViewer.StoreState {
         let traceURL = URL(fileURLWithPath: "/Users/ilya/Development/RecordMeeting.lzma")
         let data = try Data(contentsOf: traceURL)
@@ -978,6 +1088,19 @@ final class SessionTraceViewerTests: XCTestCase {
             label.append(character)
         }
         return label.count > 1 ? label : nil
+    }
+
+    private func overviewEffectActionNode(
+        named actionCase: String,
+        in state: TraceViewer.StoreState
+    ) -> TraceViewer.StoreState.OverviewGraphNode? {
+        state.overviewGraphNodes.first { node in
+            guard let item = state.itemsByID[node.id],
+                  case .action(let action) = item.node else {
+                return false
+            }
+            return action.actionCase == actionCase && action.kind == .effect
+        }
     }
 
     private func formattedStateValue(property: String, in item: TraceViewer.TimelineItem) -> String? {
