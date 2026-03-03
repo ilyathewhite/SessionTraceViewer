@@ -739,6 +739,75 @@ final class SessionTraceViewerTests: XCTestCase {
         )
     }
 
+    func testStringDiffGroupsSeparatedLineChangesIntoSeparateHunks() {
+        let state = StringDiff.StoreState(
+            title: "Diff",
+            presentationStyle: .standard,
+            string1Caption: "Old Value",
+            string1: "alpha\nbeta\ngamma\ndelta",
+            string2Caption: "New Value",
+            string2: "alpha\nBETA\ngamma\nDELTA"
+        )
+
+        XCTAssertEqual(state.diffHunks.count, 2)
+        XCTAssertEqual(state.diffHunks.map(\.oldRangeLabel), ["L2", "L4"])
+        XCTAssertEqual(state.diffHunks.map(\.newRangeLabel), ["L2", "L4"])
+    }
+
+    func testStringDiffKeepsUnchangedLinesAsContextSections() {
+        let state = StringDiff.StoreState(
+            title: "Diff",
+            presentationStyle: .standard,
+            string1Caption: "Old Value",
+            string1: "alpha\nbeta\ngamma\ndelta",
+            string2Caption: "New Value",
+            string2: "alpha\nBETA\ngamma\nDELTA"
+        )
+
+        XCTAssertEqual(state.sections.count, 4)
+        XCTAssertFalse(state.sections[0].isDiff)
+        XCTAssertTrue(state.sections[1].isDiff)
+        XCTAssertFalse(state.sections[2].isDiff)
+        XCTAssertTrue(state.sections[3].isDiff)
+        XCTAssertEqual(state.sections[0].rows[0].oldLine?.lineNumber, 1)
+        XCTAssertEqual(state.sections[0].rows[0].newLine?.lineNumber, 1)
+        XCTAssertEqual(state.sections[2].rows[0].oldLine?.lineNumber, 3)
+        XCTAssertEqual(state.sections[2].rows[0].newLine?.lineNumber, 3)
+    }
+
+    func testStringDiffUsesEmptyOldRangeForPureInsertionHunk() {
+        let state = StringDiff.StoreState(
+            title: "Diff",
+            presentationStyle: .standard,
+            string1Caption: "Old Value",
+            string1: "one\nthree",
+            string2Caption: "New Value",
+            string2: "one\ntwo\nthree"
+        )
+
+        XCTAssertEqual(state.diffHunks.count, 1)
+        XCTAssertEqual(state.diffHunks[0].oldRangeLabel, "No lines")
+        XCTAssertEqual(state.diffHunks[0].newRangeLabel, "L2")
+        XCTAssertNil(state.diffHunks[0].rows[0].oldLine)
+        XCTAssertEqual(state.diffHunks[0].rows[0].newLine?.lineNumber, 2)
+    }
+
+    func testStringDiffKeepsWholeDocumentAsContextWhenThereAreNoChanges() {
+        let state = StringDiff.StoreState(
+            title: "Diff",
+            presentationStyle: .standard,
+            string1Caption: "Old Value",
+            string1: "one\ntwo",
+            string2Caption: "New Value",
+            string2: "one\ntwo"
+        )
+
+        XCTAssertTrue(state.diffHunks.isEmpty)
+        XCTAssertEqual(state.sections.count, 1)
+        XCTAssertFalse(state.sections[0].isDiff)
+        XCTAssertEqual(state.sections[0].rows.map(\.id).count, 2)
+    }
+
     private func makeStateFromGeneratedTrace() throws -> TraceViewer.StoreState {
         let name = "SessionTraceViewerTests-\(UUID().uuidString)"
         let store = TestTraceFeature.store()
