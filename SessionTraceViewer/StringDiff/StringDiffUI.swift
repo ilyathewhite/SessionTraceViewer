@@ -128,23 +128,28 @@ private struct StringDiffColumnHeader: View {
     }
 }
 
-private struct StringDiffInlineSectionCard: View {
-    let section: StringDiff.StoreState.DiffSection
+private struct StringDiffInlineValueCard: View {
+    let title: String
+    let text: AttributedString
+
+    private var displayText: AttributedString {
+        text.characters.isEmpty ? AttributedString(" ") : text
+    }
 
     var body: some View {
-        StringDiffSectionRows(
-            section: section,
-            presentationStyle: .inlineEmbedded
-        )
-        .padding(section.isDiff ? 4 : 0)
-        .overlay {
-            if section.isDiff {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(ViewerTheme.sectionStroke, lineWidth: 1)
-                    .padding(1)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.caption.smallCaps().weight(.semibold))
+                .foregroundStyle(ViewerTheme.secondaryText)
+
+            Text(displayText)
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, section.isDiff ? 2 : 0)
+        .padding(.horizontal, 8)
     }
 }
 
@@ -203,28 +208,66 @@ private struct StringDiffInlineLoadedView: View {
     let newTitle: String
     let sections: [StringDiff.StoreState.DiffSection]
 
+    private var oldText: AttributedString {
+        combinedText(for: .old)
+    }
+
+    private var newText: AttributedString {
+        combinedText(for: .new)
+    }
+
+    private func combinedText(for side: StringDiff.DiffSide) -> AttributedString {
+        let lines = sections
+            .flatMap(\.rows)
+            .compactMap { row in
+                switch side {
+                case .old:
+                    row.oldLine
+                case .new:
+                    row.newLine
+                }
+            }
+
+        var combined = AttributedString()
+        for (index, line) in lines.enumerated() {
+            if index > 0 {
+                combined.append(AttributedString("\n"))
+            }
+            combined.append(line.text)
+        }
+        return combined
+    }
+
     var body: some View {
+        let verticalPadding: CGFloat = 6
         Group {
             if sections.isEmpty {
                 Text("No Differences")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(ViewerTheme.secondaryText)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, verticalPadding)
             }
             else {
-                VStack(alignment: .leading, spacing: 0) {
-                    StringDiffColumnHeader(
-                        presentationStyle: .inlineEmbedded,
-                        oldTitle: oldTitle,
-                        newTitle: newTitle
+                HStack(alignment: .top, spacing: 0) {
+                    StringDiffInlineValueCard(
+                        title: oldTitle,
+                        text: oldText
                     )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.vertical, verticalPadding)
 
-                    Divider()
+                    Rectangle()
+                        .fill(ViewerTheme.sectionStroke)
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
 
-                    ForEach(sections) { section in
-                        StringDiffInlineSectionCard(section: section)
-                    }
+                    StringDiffInlineValueCard(
+                        title: newTitle,
+                        text: newText
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.vertical, verticalPadding)
                 }
             }
         }

@@ -135,6 +135,7 @@ struct EventInspectorView: View {
             Grid(alignment: .topLeading, horizontalSpacing: Layout.columnSpacing, verticalSpacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     let isExpanded = rowExpansionByID.wrappedValue[row.id] ?? row.isExpandedByDefault
+                    let showsInlineDiff = inlineDiffRowID == row.id && inlineStringDiffUI != nil
 
                     GridRow(alignment: .top) {
                         propertyColumn(row: row, isExpanded: isExpanded) {
@@ -157,6 +158,10 @@ struct EventInspectorView: View {
                         onRowTap?(row)
                     }
 
+                    if showsInlineDiff {
+                        gridSeparator(columnCount: showsDiffColumn ? 3 : 2)
+                    }
+
                     if inlineDiffRowID == row.id, let inlineStringDiffUI {
                         GridRow(alignment: .top) {
                             Color.clear
@@ -172,10 +177,7 @@ struct EventInspectorView: View {
                     }
 
                     if index < rows.count - 1 {
-                        Rectangle()
-                            .fill(ViewerTheme.sectionStroke)
-                            .frame(height: 1)
-                            .gridCellColumns(showsDiffColumn ? 3 : 2)
+                        gridSeparator(columnCount: showsDiffColumn ? 3 : 2)
                     }
                 }
             }
@@ -279,14 +281,19 @@ struct EventInspectorView: View {
         stringDiffUI.makeView()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 8)
-            .padding(.top, 4)
-            .padding(.bottom, Layout.rowBottomPadding)
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(ViewerTheme.sectionStroke)
                     .frame(width: Layout.separatorWidth)
                     .offset(x: -(Layout.columnSpacing / 2))
             }
+    }
+
+    private func gridSeparator(columnCount: Int) -> some View {
+        Rectangle()
+            .fill(ViewerTheme.sectionStroke)
+            .frame(height: 1)
+            .gridCellColumns(columnCount)
     }
 
     private func toggleRowExpansion(
