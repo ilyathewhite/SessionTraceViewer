@@ -27,7 +27,9 @@ extension TraceViewer: StoreUINamespace {
                         .ignoresSafeArea()
 
                     VStack(spacing: 0) {
-                        overviewPanel
+                        overviewSection
+
+                        Divider()
 
                         HStack(spacing: 0) {
                             timelineListPanel
@@ -85,13 +87,18 @@ extension TraceViewer: StoreUINamespace {
                     send(.selectEvent(id: timelineID))
                 }
             )
-            .shadow(color: ViewerTheme.rowLiftShadow, radius: 1.4, x: 0, y: 1)
-            .zIndex(1)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(ViewerTheme.sectionStroke)
-                    .frame(height: 1)
-            }
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .padding(8)
+            .viewerPanelCardStyle()
+        }
+
+        private var overviewSection: some View {
+            overviewPanel
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(ViewerTheme.overviewAreaBackground)
         }
 
         private var timelineListPanel: some View {

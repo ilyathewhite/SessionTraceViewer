@@ -41,6 +41,7 @@ enum ViewerTheme {
     static let overviewSelection = rgb(96, 151, 228)
     static let overviewSelectionRing = rgb(154, 189, 235)
     static let overviewSelectionDot = Color.white
+    static let overviewAreaBackground = rgb(232, 236, 241)
     static let sectionBackground = Color.white
     static let sectionStroke = rgb(223, 227, 231)
     static let metricRowBackground = rgb(247, 248, 250)
@@ -213,8 +214,32 @@ struct ViewerListCardModifier: ViewModifier {
     }
 }
 
+struct ViewerPanelCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(ViewerTheme.sectionBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ViewerTheme.rowStroke, lineWidth: 1)
+            )
+            .shadow(
+                color: ViewerTheme.rowLiftShadow,
+                radius: 1.4,
+                x: 0,
+                y: 1
+            )
+    }
+}
+
 extension View {
     func viewerListCardStyle(selected: Bool = false) -> some View {
         modifier(ViewerListCardModifier(isSelected: selected))
+    }
+
+    func viewerPanelCardStyle() -> some View {
+        modifier(ViewerPanelCardModifier())
     }
 }
