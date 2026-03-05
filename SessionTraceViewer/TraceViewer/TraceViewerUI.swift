@@ -232,9 +232,11 @@ private struct TimelineOverviewView: View {
             }
 
             if let hoveredTooltip {
-                GraphNodeTooltip(text: hoveredTooltip.text)
-                    .frame(maxWidth: tooltipMaxWidth)
-                    .position(hoveredTooltip.position)
+                GraphNodeTooltip(
+                    text: hoveredTooltip.text,
+                    width: hoveredTooltip.width
+                )
+                    .position(tooltipPosition(for: hoveredTooltip.nodePoint, tooltipWidth: hoveredTooltip.width))
                     .allowsHitTesting(false)
                     .zIndex(10)
             }
@@ -260,7 +262,7 @@ private struct TimelineOverviewView: View {
         }
     }
 
-    private var hoveredTooltip: (text: String, position: CGPoint)? {
+    private var hoveredTooltip: (text: String, nodePoint: CGPoint, width: CGFloat)? {
         guard let hoveredNodeID,
               let node = nodes.first(where: { $0.id == hoveredNodeID }),
               let text = tooltipTextByNodeID[hoveredNodeID],
@@ -269,10 +271,23 @@ private struct TimelineOverviewView: View {
         }
 
         let nodePoint = point(for: node)
-        let xPadding = tooltipMaxWidth / 2 + 10
+        let width = tooltipWidth(for: text)
+        return (text, nodePoint, width)
+    }
+
+    private func tooltipPosition(for nodePoint: CGPoint, tooltipWidth: CGFloat) -> CGPoint {
+        let xPadding = tooltipWidth / 2 + 10
         let clampedX = min(max(nodePoint.x, xPadding), max(graphWidth - xPadding, xPadding))
         let y = max(16, nodePoint.y - 22)
-        return (text, CGPoint(x: clampedX, y: y))
+        return CGPoint(x: clampedX, y: y)
+    }
+
+    private func tooltipWidth(for text: String) -> CGFloat {
+        let minWidth: CGFloat = 56
+        let horizontalPadding: CGFloat = 16
+        let averageCharacterWidth: CGFloat = 6.2
+        let estimatedTextWidth = CGFloat(text.count) * averageCharacterWidth
+        return min(max(estimatedTextWidth + horizontalPadding, minWidth), tooltipMaxWidth)
     }
 
     private func scrollToSelected(_ proxy: ScrollViewProxy) {
@@ -552,6 +567,7 @@ private struct TimelineOverviewView: View {
 
 private struct GraphNodeTooltip: View {
     let text: String
+    let width: CGFloat
 
     var body: some View {
         Text(text)
@@ -559,8 +575,10 @@ private struct GraphNodeTooltip: View {
             .foregroundStyle(Color.white)
             .lineLimit(1)
             .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
+            .frame(width: width, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color.black.opacity(0.82))
