@@ -10,6 +10,7 @@ import SwiftUI
 struct TimelineEventRowCard: View {
     let item: TraceViewer.TimelineItem
     let isSelected: Bool
+    let selectionIsFocused: Bool
 
     private var kindColor: Color {
         ViewerTheme.color(for: item.colorKind)
@@ -53,7 +54,7 @@ struct TimelineEventRowCard: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 6)
-        .viewerListCardStyle(selected: isSelected)
+        .viewerListCardStyle(selected: isSelected, isFocused: selectionIsFocused)
     }
 
     private var subtitleText: Text {

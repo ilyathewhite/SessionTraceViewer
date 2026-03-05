@@ -12,7 +12,10 @@ extension TraceViewer: StoreUINamespace {
     struct ContentView: StoreContentView {
         typealias Nsp = TraceViewer
         @ObservedObject var store: Store
-        @FocusState private var hasKeyboardFocus: Bool
+        @Namespace private var timelineFocusScope
+        @FocusState private var timelineListHasFocus: Bool
+        @Environment(\.controlActiveState) private var controlActiveState
+        @Environment(\.resetFocus) private var resetFocus
         private let timelineListIdealWidth: CGFloat = 420
         private let timelineListMinimumWidth: CGFloat = 220
 
@@ -48,22 +51,6 @@ extension TraceViewer: StoreUINamespace {
             }
             .buttonStyle(.borderless)
             .preferredColorScheme(.light)
-            .contentShape(Rectangle())
-            .focusable()
-            .focusEffectDisabled()
-            .focused($hasKeyboardFocus)
-            .onAppear {
-                DispatchQueue.main.async {
-                    hasKeyboardFocus = true
-                }
-            }
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded {
-                        hasKeyboardFocus = true
-                    }
-            )
-            .onMoveCommand(perform: handleMove)
         }
 
         private func timelineListWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -72,6 +59,10 @@ extension TraceViewer: StoreUINamespace {
                 max(timelineListMinimumWidth, availableWidth * 0.42)
             )
             return min(max(availableWidth - 1, 0), preferredWidth)
+        }
+
+        private var selectionIsFocused: Bool {
+            timelineListHasFocus && controlActiveState == .key
         }
 
         private var overviewPanel: some View {
@@ -108,7 +99,8 @@ extension TraceViewer: StoreUINamespace {
                         ForEach(store.state.visibleItems) { item in
                             TimelineEventRow(
                                 item: item,
-                                isSelected: item.id == store.state.selectedID
+                                isSelected: item.id == store.state.selectedID,
+                                selectionIsFocused: selectionIsFocused
                             )
                             .id(item.id)
                             .onTapGesture {
@@ -118,9 +110,19 @@ extension TraceViewer: StoreUINamespace {
                     }
                     .padding(10)
                 }
+                .contentShape(Rectangle())
+                .focusable(true, interactions: .edit)
+                .focusEffectDisabled()
+                .focused($timelineListHasFocus)
+                .focusScope(timelineFocusScope)
+                .prefersDefaultFocus(true, in: timelineFocusScope)
+                .onMoveCommand(perform: handleMove)
                 .onChange(of: store.state.selectedID) { _, id in
                     guard let id else { return }
                     proxy.scrollTo(id)
+                    if !timelineListHasFocus {
+                        resetFocus(in: timelineFocusScope)
+                    }
                 }
             }
             .background(ViewerTheme.timelinePanelBackground)
@@ -140,6 +142,7 @@ extension TraceViewer: StoreUINamespace {
         }
 
         private func handleMove(_ direction: MoveCommandDirection) {
+            guard timelineListHasFocus else { return }
             switch direction {
             case .up:
                 send(.selectPreviousVisible)

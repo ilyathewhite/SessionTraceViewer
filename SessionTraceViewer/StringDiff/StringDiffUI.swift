@@ -337,10 +337,8 @@ private struct StringDiffWindowLoadedView: View {
                         .padding(.vertical, 12)
                     }
                     .onAppear {
-                        DispatchQueue.main.async {
-                            hasKeyboardFocus = true
-                            scrollToSelectedDiff(using: proxy, animated: false)
-                        }
+                        hasKeyboardFocus = true
+                        scrollToSelectedDiff(using: proxy, animated: false)
                     }
                     .onChange(of: store.state.selectedDiffID) { _, _ in
                         scrollToSelectedDiff(using: proxy)
@@ -353,11 +351,6 @@ private struct StringDiffWindowLoadedView: View {
         .focusable()
         .focusEffectDisabled()
         .focused($hasKeyboardFocus)
-        .onAppear {
-            DispatchQueue.main.async {
-                hasKeyboardFocus = true
-            }
-        }
         .simultaneousGesture(
             TapGesture()
                 .onEnded {

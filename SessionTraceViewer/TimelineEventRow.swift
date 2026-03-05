@@ -10,9 +10,14 @@ import SwiftUI
 struct TimelineEventRow: View {
     let item: TraceViewer.TimelineItem
     let isSelected: Bool
+    let selectionIsFocused: Bool
 
     var body: some View {
-        TimelineEventRowCard(item: item, isSelected: isSelected)
+        TimelineEventRowCard(
+            item: item,
+            isSelected: isSelected,
+            selectionIsFocused: selectionIsFocused
+        )
         .padding(.horizontal, 6)
         .contentShape(Rectangle())
     }

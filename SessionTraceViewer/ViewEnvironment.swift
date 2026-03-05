@@ -32,6 +32,8 @@ enum ViewerTheme {
     static let rowFill = Color.white
     static let rowSelectedFill = rgb(225, 236, 251)
     static let rowSelectedStroke = rgb(171, 197, 236)
+    static let rowInactiveSelectedFill = rgb(234, 238, 242)
+    static let rowInactiveSelectedStroke = rgb(208, 215, 223)
     static let rowStroke = rgb(223, 227, 231)
     static let rowTopHighlight = Color.white
     static let rowLiftShadow = Color.black.opacity(0.035)
@@ -189,16 +191,27 @@ enum ViewerTheme {
 
 struct ViewerListCardModifier: ViewModifier {
     let isSelected: Bool
+    let isFocused: Bool
+
+    private var fillColor: Color {
+        guard isSelected else { return ViewerTheme.rowFill }
+        return isFocused ? ViewerTheme.rowSelectedFill : ViewerTheme.rowInactiveSelectedFill
+    }
+
+    private var strokeColor: Color {
+        guard isSelected else { return ViewerTheme.rowStroke }
+        return isFocused ? ViewerTheme.rowSelectedStroke : ViewerTheme.rowInactiveSelectedStroke
+    }
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isSelected ? ViewerTheme.rowSelectedFill : ViewerTheme.rowFill)
+                    .fill(fillColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(isSelected ? ViewerTheme.rowSelectedStroke : ViewerTheme.rowStroke, lineWidth: 1)
+                    .stroke(strokeColor, lineWidth: 1)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -235,8 +248,8 @@ struct ViewerPanelCardModifier: ViewModifier {
 }
 
 extension View {
-    func viewerListCardStyle(selected: Bool = false) -> some View {
-        modifier(ViewerListCardModifier(isSelected: selected))
+    func viewerListCardStyle(selected: Bool = false, isFocused: Bool = true) -> some View {
+        modifier(ViewerListCardModifier(isSelected: selected, isFocused: isFocused))
     }
 
     func viewerPanelCardStyle() -> some View {
