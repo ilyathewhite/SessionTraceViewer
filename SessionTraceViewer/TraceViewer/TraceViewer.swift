@@ -13,6 +13,7 @@ enum TraceViewer: StoreNamespace {
 
     struct StoreEnvironment {
         let resetTimelineListFocus: @MainActor () -> Void
+        let scrollTimelineListToID: @MainActor (String) -> Void
     }
 
     enum MutatingAction {
@@ -38,6 +39,7 @@ enum TraceViewer: StoreNamespace {
     enum EffectAction {
         case none
         case resetTimelineListFocus
+        case scrollTimelineListToID(String)
     }
 
     enum EventKind: String, Equatable, Hashable {
@@ -1517,6 +1519,31 @@ enum TraceViewer: StoreNamespace {
 }
 
 extension TraceViewer {
+    private static func followUpEffect(
+        shouldResetTimelineListFocus: Bool,
+        previousSelectedID: String?,
+        selectedID: String?
+    ) -> Store.SyncEffect {
+        var actions: [Store.Action] = []
+
+        if shouldResetTimelineListFocus {
+            actions.append(.effect(.resetTimelineListFocus))
+        }
+        if previousSelectedID != selectedID,
+           let selectedID {
+            actions.append(.effect(.scrollTimelineListToID(selectedID)))
+        }
+
+        switch actions.count {
+        case 0:
+            return .none
+        case 1:
+            return .action(actions[0])
+        default:
+            return .actions(actions)
+        }
+    }
+
     @MainActor
     static func store(traceCollection: SessionTraceCollection) -> Store {
         Store(.init(traceCollection: traceCollection), env: nil)
@@ -1524,50 +1551,52 @@ extension TraceViewer {
 
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
+        let previousSelectedID = state.selectedID
+        var shouldResetTimelineListFocus = false
+
         switch action {
         case .replaceTraceCollection(let traceCollection):
             state.replaceTraceCollection(traceCollection)
-            return .none
 
         case .selectEvent(let id):
             state.selectEvent(id: id)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectAllEventKinds:
             state.selectAllEventKinds()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .toggleEventKindFilter(let kind):
             state.toggleEventKindFilter(kind)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .toggleUserEventFilter:
             state.toggleUserEventFilter()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectNextVisible:
             state.selectVisible(offset: 1)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectPreviousVisible:
             state.selectVisible(offset: -1)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectNextGraphNode:
             state.selectGraphNode(offset: 1)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectPreviousGraphNode:
             state.selectGraphNode(offset: -1)
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectFirstVisible:
             state.selectFirstVisible()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .selectLastVisible:
             state.selectLastVisible()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .toggleCollapseSelected:
             guard let selectedID = state.selectedID else { break }
@@ -1579,38 +1608,42 @@ extension TraceViewer {
                 state.collapsedIDs.insert(selectedID)
             }
             state.clampSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .collapseSelected:
             guard let selectedID = state.selectedID else { break }
             guard state.hasChildren(selectedID) else { break }
             state.collapsedIDs.insert(selectedID)
             state.clampSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .expandSelected:
             guard let selectedID = state.selectedID else { break }
             state.collapsedIDs.remove(selectedID)
             state.clampSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .collapseAll:
             for id in state.orderedIDs where state.hasChildren(id) {
                 state.collapsedIDs.insert(id)
             }
             state.clampSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .expandAll:
             state.collapsedIDs.removeAll()
             state.clampSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
 
         case .focusSelection:
             state.focusOnSelection()
-            return .action(.effect(.resetTimelineListFocus))
+            shouldResetTimelineListFocus = true
         }
-        return .none
+        return followUpEffect(
+            shouldResetTimelineListFocus: shouldResetTimelineListFocus,
+            previousSelectedID: previousSelectedID,
+            selectedID: state.selectedID
+        )
     }
 
     @MainActor
@@ -1621,6 +1654,10 @@ extension TraceViewer {
 
         case .resetTimelineListFocus:
             env.resetTimelineListFocus()
+            return .none
+
+        case .scrollTimelineListToID(let id):
+            env.scrollTimelineListToID(id)
             return .none
         }
     }

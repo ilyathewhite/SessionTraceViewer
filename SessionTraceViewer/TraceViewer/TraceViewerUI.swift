@@ -13,6 +13,7 @@ extension TraceViewer: StoreUINamespace {
         typealias Nsp = TraceViewer
         @ObservedObject var store: Store
         @Namespace private var timelineFocusScope
+        @State private var timelineListScrollCoordinator = TimelineListScrollCoordinator()
         @FocusState private var timelineListHasFocus: Bool
         @Environment(\.controlActiveState) private var controlActiveState
         @Environment(\.resetFocus) private var resetFocus
@@ -56,9 +57,13 @@ extension TraceViewer: StoreUINamespace {
             .buttonStyle(.borderless)
             .preferredColorScheme(.light)
             .connectOnAppear {
+                let timelineListScrollCoordinator = timelineListScrollCoordinator
                 store.environment = .init(
                     resetTimelineListFocus: {
                         resetFocus(in: timelineFocusScope)
+                    },
+                    scrollTimelineListToID: { id in
+                        timelineListScrollCoordinator.scroll(to: id)
                     }
                 )
             }
@@ -171,9 +176,11 @@ extension TraceViewer: StoreUINamespace {
                 .focusScope(timelineFocusScope)
                 .prefersDefaultFocus(true, in: timelineFocusScope)
                 .onMoveCommand(perform: handleMove)
-                .onChange(of: store.state.selectedID) { _, id in
-                    guard let id else { return }
-                    proxy.scrollTo(id)
+                .onAppear {
+                    timelineListScrollCoordinator.install(proxy: proxy)
+                }
+                .onDisappear {
+                    timelineListScrollCoordinator.clear()
                 }
             }
             .background(ViewerTheme.timelinePanelBackground)
@@ -203,6 +210,27 @@ extension TraceViewer: StoreUINamespace {
                 break
             }
         }
+    }
+}
+
+@MainActor
+private final class TimelineListScrollCoordinator {
+    private var scrollToID: ((String) -> Void)?
+
+    func install(proxy: ScrollViewProxy) {
+        scrollToID = { id in
+            withAnimation {
+                proxy.scrollTo(id)
+            }
+        }
+    }
+
+    func clear() {
+        scrollToID = nil
+    }
+
+    func scroll(to id: String) {
+        scrollToID?(id)
     }
 }
 

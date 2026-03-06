@@ -221,6 +221,30 @@ final class SessionTraceViewerTests: XCTestCase {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, targetID)
     }
 
+    func testSelectEventEmitsFocusResetAndScrollEffectWhenSelectionChanges() throws {
+        var state = try makeStateFromGeneratedTrace()
+        guard let targetID = state.visibleIDs.dropFirst().first else {
+            throw XCTSkip("Trace did not contain enough visible nodes for selection effect test.")
+        }
+
+        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID))
+
+        XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
+        XCTAssertEqual(scrolledTimelineID(in: effect), targetID)
+    }
+
+    func testSelectEventDoesNotEmitScrollEffectWhenSelectionIsUnchanged() throws {
+        var state = try makeStateFromGeneratedTrace()
+        guard let selectedID = state.selectedID else {
+            throw XCTSkip("Trace did not contain an initial selection.")
+        }
+
+        let effect = TraceViewer.reduce(&state, .selectEvent(id: selectedID))
+
+        XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
+        XCTAssertNil(scrolledTimelineID(in: effect))
+    }
+
     func testSelectNextGraphNodeAdvancesToNextVisibleGraphNode() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
@@ -397,6 +421,24 @@ final class SessionTraceViewerTests: XCTestCase {
 
         XCTAssertEqual(state.selectedID, collapsibleID)
         XCTAssertTrue(state.collapsedIDs.contains(collapsibleID))
+    }
+
+    func testReplaceTraceCollectionEmitsScrollEffectWhenSelectionChanges() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let replacementCollection = try makeStateFromRecordMeetingTrace().traceCollection
+        let previousSelectedID = state.selectedID
+
+        let effect = TraceViewer.reduce(&state, .replaceTraceCollection(replacementCollection))
+
+        guard let selectedID = state.selectedID else {
+            throw XCTSkip("Replacement trace did not contain a selectable item.")
+        }
+        guard previousSelectedID != selectedID else {
+            throw XCTSkip("Replacement trace unexpectedly preserved the same selection ID.")
+        }
+
+        XCTAssertFalse(containsResetTimelineListFocusAction(in: effect))
+        XCTAssertEqual(scrolledTimelineID(in: effect), selectedID)
     }
 
     func testSyncScheduledEffectActionsShareOverviewColumn() async throws {
@@ -1232,6 +1274,33 @@ final class SessionTraceViewerTests: XCTestCase {
             }
             return action.actionCase == actionCase && action.kind == .effect
         }
+    }
+
+    private func timelineActions(in effect: TraceViewer.Store.SyncEffect) -> [TraceViewer.Store.Action] {
+        switch effect {
+        case .action(let action):
+            return [action]
+        case .actions(let actions):
+            return actions
+        case .none:
+            return []
+        }
+    }
+
+    private func containsResetTimelineListFocusAction(in effect: TraceViewer.Store.SyncEffect) -> Bool {
+        timelineActions(in: effect).contains { action in
+            if case .effect(.resetTimelineListFocus) = action {
+                return true
+            }
+            return false
+        }
+    }
+
+    private func scrolledTimelineID(in effect: TraceViewer.Store.SyncEffect) -> String? {
+        timelineActions(in: effect).compactMap { action in
+            guard case .effect(.scrollTimelineListToID(let id)) = action else { return nil }
+            return id
+        }.last
     }
 
     private func formattedStateValue(property: String, in item: TraceViewer.TimelineItem) -> String? {
