@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct TimelineEventRowCard: View {
+    private enum Layout {
+        static let kindChipMinWidth: CGFloat = 60
+    }
+
     let item: TraceViewer.TimelineItem
     let isSelected: Bool
     let selectionIsFocused: Bool
@@ -25,6 +29,7 @@ struct TimelineEventRowCard: View {
                         .foregroundStyle(kindColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
+                        .frame(minWidth: Layout.kindChipMinWidth)
                         .background(ViewerTheme.chipBackground(for: item.colorKind), in: Capsule())
                         .overlay(
                             Capsule()
