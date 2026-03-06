@@ -66,7 +66,7 @@ enum ViewerTheme {
         base: rgb(178, 126, 56),
         graph: rgb(208, 150, 76)
     )
-    static let actionFamily = SemanticFamily(
+    static let flowFamily = SemanticFamily(
         base: rgb(69, 127, 130),
         graph: rgb(90, 150, 154)
     )
@@ -83,7 +83,7 @@ enum ViewerTheme {
         graph: rgb(150, 156, 168)
     )
 
-    static let action = actionFamily.base
+    static let flow = flowFamily.base
     static let state = stateFamily.base
     static let mutation = mutationFamily.base
     static let effect = effectFamily.base
@@ -100,8 +100,8 @@ enum ViewerTheme {
         switch kind {
         case .state:
             return state
-        case .action:
-            return action
+        case .flow:
+            return flow
         case .mutation:
             return mutation
         case .effect:
@@ -115,8 +115,6 @@ enum ViewerTheme {
         switch kind {
         case .state:
             return state
-        case .action:
-            return action
         case .mutation:
             return mutation
         case .effect:
@@ -134,8 +132,6 @@ enum ViewerTheme {
         switch kind {
         case .state:
             return stateFamily.graph
-        case .action:
-            return actionFamily.graph
         case .mutation:
             return mutationFamily.graph
         case .effect:
@@ -153,8 +149,6 @@ enum ViewerTheme {
         switch kind {
         case .state:
             return rgb(236, 240, 247)
-        case .action:
-            return rgb(232, 242, 243)
         case .mutation:
             return rgb(232, 241, 233)
         case .effect:
@@ -172,8 +166,6 @@ enum ViewerTheme {
         switch kind {
         case .state:
             return rgb(202, 210, 224)
-        case .action:
-            return rgb(192, 216, 217)
         case .mutation:
             return rgb(193, 215, 195)
         case .effect:

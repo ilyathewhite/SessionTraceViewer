@@ -36,7 +36,7 @@ enum TraceViewer: StoreNamespace {
 
     enum EventKind: String, Equatable, Hashable {
         case state
-        case action
+        case flow
         case mutation
         case effect
         case batch
@@ -44,7 +44,6 @@ enum TraceViewer: StoreNamespace {
 
     enum EventColorKind: Equatable, Hashable {
         case state
-        case action
         case mutation
         case effect
         case batch
@@ -96,7 +95,7 @@ enum TraceViewer: StoreNamespace {
         struct OverviewGraphNode: Identifiable, Equatable {
             enum Kind: Equatable {
                 case state
-                case action
+                case flow
                 case mutation
                 case effect
                 case batch
@@ -262,7 +261,7 @@ enum TraceViewer: StoreNamespace {
 
             for node in sortedNodes {
                 guard !hiddenAppliedNodeIDs.contains(node.id) else { continue }
-                let item = Self.makeItem(
+                guard let item = Self.makeItem(
                     node: node,
                     initialStateID: initialStateID,
                     childrenByParentID: childrenByParentID,
@@ -271,7 +270,9 @@ enum TraceViewer: StoreNamespace {
                     visibleAppliedEffectActionIDs: visibleAppliedEffectActionIDs,
                     hiddenAppliedMutationByActionID: hiddenAppliedMutationByActionID,
                     hiddenAppliedEffectByActionID: hiddenAppliedEffectByActionID
-                )
+                ) else {
+                    continue
+                }
                 itemsByID[item.id] = item
                 orderedIDs.append(item.id)
                 kindCounts[item.kind, default: 0] += 1
@@ -541,7 +542,7 @@ enum TraceViewer: StoreNamespace {
             visibleAppliedEffectActionIDs: Set<String>,
             hiddenAppliedMutationByActionID: [String: SessionGraph.MutationNode],
             hiddenAppliedEffectByActionID: [String: SessionGraph.EffectNode]
-        ) -> TimelineItem {
+        ) -> TimelineItem? {
             switch node {
             case .state(let state):
                 let isInitialState = (state.id.rawValue == initialStateID)
@@ -559,29 +560,6 @@ enum TraceViewer: StoreNamespace {
 
             case .action(let action):
                 let collapsedAppliedMutation = hiddenAppliedMutationByActionID[action.id.rawValue]
-                let eventKind: EventKind = {
-                    if action.kind == .mutating {
-                        return .mutation
-                    }
-                    if action.kind == .effect {
-                        return .effect
-                    }
-                    return .action
-                }()
-                let eventColorKind: EventColorKind = {
-                    switch action.kind {
-                    case .publish:
-                        return .publish
-                    case .cancel:
-                        return .cancel
-                    case .mutating:
-                        return .mutation
-                    case .effect:
-                        return .effect
-                    case .none:
-                        return .action
-                    }
-                }()
                 let title: String = {
                     switch action.kind {
                     case .effect:
@@ -590,7 +568,9 @@ enum TraceViewer: StoreNamespace {
                         return "Publish"
                     case .cancel:
                         return "Cancel"
-                    case .mutating, .none:
+                    case .mutating:
+                        return action.actionCase
+                    case .none:
                         return action.actionCase
                     }
                 }()
@@ -599,6 +579,25 @@ enum TraceViewer: StoreNamespace {
                     let exactCase = Self.exactCaseLabel(from: action.action) ?? action.action
                     return "\(source) • \(exactCase)"
                 }()
+                let eventKind: EventKind
+                let eventColorKind: EventColorKind
+                switch action.kind {
+                case .mutating:
+                    eventKind = .mutation
+                    eventColorKind = .mutation
+                case .effect:
+                    eventKind = .effect
+                    eventColorKind = .effect
+                case .publish:
+                    eventKind = .flow
+                    eventColorKind = .publish
+                case .cancel:
+                    eventKind = .flow
+                    eventColorKind = .cancel
+                case .none:
+                    assertionFailure("Unexpected traced .none action node: \(action.id.rawValue)")
+                    return nil
+                }
 
                 return .init(
                     id: action.id.rawValue,
@@ -1274,8 +1273,8 @@ enum TraceViewer: StoreNamespace {
                     switch item.kind {
                     case .state:
                         return .state
-                    case .action:
-                        return .action
+                    case .flow:
+                        return .flow
                     case .mutation:
                         return .mutation
                     case .effect:

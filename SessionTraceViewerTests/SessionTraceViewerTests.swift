@@ -166,6 +166,23 @@ final class SessionTraceViewerTests: XCTestCase {
         }
     }
 
+    func testPublishAndCancelActionsUseFlowKind() throws {
+        let state = try makeStateFromRecordMeetingTrace()
+        let flowItems = state.itemsByID.values.compactMap { item -> TraceViewer.TimelineItem? in
+            guard case .action(let action) = item.node else { return nil }
+            guard action.kind == .publish || action.kind == .cancel else { return nil }
+            return item
+        }
+
+        guard !flowItems.isEmpty else {
+            throw XCTSkip("No publish/cancel actions found in record meeting trace.")
+        }
+
+        for item in flowItems {
+            XCTAssertEqual(item.kind, .flow, "Publish/cancel actions should be labeled FLOW.")
+        }
+    }
+
     func testStateValueRowsCarryComparisonValuesForChangedProperties() throws {
         let state = try makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
