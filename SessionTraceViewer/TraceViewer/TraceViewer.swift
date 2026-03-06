@@ -11,11 +11,16 @@ import ReducerArchitecture
 enum TraceViewer: StoreNamespace {
     typealias PublishedValue = Void
 
-    struct StoreEnvironment {}
+    struct StoreEnvironment {
+        let resetTimelineListFocus: @MainActor () -> Void
+    }
 
     enum MutatingAction {
         case replaceTraceCollection(SessionTraceCollection)
         case selectEvent(id: String)
+        case selectAllEventKinds
+        case toggleEventKindFilter(EventKind)
+        case toggleUserEventFilter
         case selectNextVisible
         case selectPreviousVisible
         case selectNextGraphNode
@@ -32,6 +37,7 @@ enum TraceViewer: StoreNamespace {
 
     enum EffectAction {
         case none
+        case resetTimelineListFocus
     }
 
     enum EventKind: String, Equatable, Hashable {
@@ -89,9 +95,23 @@ enum TraceViewer: StoreNamespace {
                   let range = subtitle.range(of: Self.subtitleSeparator) else { return nil }
             return String(subtitle[range.upperBound...])
         }
+
+        var isUserSourceEvent: Bool {
+            subtitleSourceLabel == "USER"
+        }
     }
 
     struct StoreState {
+        struct CustomScopeSelection: Equatable {
+            var eventKinds: Set<EventKind> = []
+            var includesUserEvents = false
+        }
+
+        enum ScopeFilter: Equatable {
+            case all
+            case custom(CustomScopeSelection)
+        }
+
         struct OverviewGraphNode: Identifiable, Equatable {
             enum Kind: Equatable {
                 case state
@@ -127,18 +147,25 @@ enum TraceViewer: StoreNamespace {
             let maxLane: Int
         }
 
+        private static let scopeBarEventKinds: [EventKind] = [
+            .state,
+            .mutation,
+            .effect,
+            .flow,
+        ]
+
         let traceCollection: SessionTraceCollection
         let graph: SessionGraph
         let orderedIDs: [String]
         let itemsByID: [String: TimelineItem]
         let childrenByParentID: [String: [String]]
         let descendantCountByID: [String: Int]
-        let kindCounts: [EventKind: Int]
         let overviewGraphNodes: [OverviewGraphNode]
         let overviewGraphNodeByID: [String: OverviewGraphNode]
         let overviewGraphIDByTimelineID: [String: String]
         let overviewGraphMaxLane: Int
 
+        var scopeFilter: ScopeFilter
         var collapsedIDs: Set<String>
         var selectedID: String?
 
@@ -256,7 +283,6 @@ enum TraceViewer: StoreNamespace {
 
             var itemsByID: [String: TimelineItem] = [:]
             var orderedIDs: [String] = []
-            var kindCounts: [EventKind: Int] = [:]
             orderedIDs.reserveCapacity(sortedNodes.count)
 
             for node in sortedNodes {
@@ -275,7 +301,6 @@ enum TraceViewer: StoreNamespace {
                 }
                 itemsByID[item.id] = item
                 orderedIDs.append(item.id)
-                kindCounts[item.kind, default: 0] += 1
             }
 
             let normalizedChildrenByParentID = childrenByParentID.mapValues { ids in
@@ -312,7 +337,6 @@ enum TraceViewer: StoreNamespace {
 
             self.orderedIDs = orderedIDs
             self.itemsByID = itemsByID
-            self.kindCounts = kindCounts
             self.childrenByParentID = normalizedChildrenByParentID
             self.descendantCountByID = descendantCountByID
 
@@ -336,6 +360,7 @@ enum TraceViewer: StoreNamespace {
             self.overviewGraphIDByTimelineID = overviewGraphPresentation.graphIDByTimelineID
             self.overviewGraphMaxLane = overviewGraphPresentation.maxLane
 
+            self.scopeFilter = .all
             self.collapsedIDs = []
             self.selectedID = orderedIDs.first
         }
@@ -360,6 +385,41 @@ enum TraceViewer: StoreNamespace {
             visibleIDs.compactMap { itemsByID[$0] }
         }
 
+        var scopeBarKinds: [EventKind] {
+            Self.scopeBarEventKinds
+        }
+
+        var isAllEventKindsSelected: Bool {
+            guard case .all = scopeFilter else { return false }
+            return true
+        }
+
+        var isUserEventFilterSelected: Bool {
+            switch scopeFilter {
+            case .all:
+                return false
+            case .custom(let selection):
+                return selection.includesUserEvents
+            }
+        }
+
+        var selectableVisibleIDs: [String] {
+            visibleIDs.filter { id in
+                guard let item = itemsByID[id] else { return false }
+                return matchesScopeFilter(item)
+            }
+        }
+
+        private func matchesScopeFilter(_ item: TimelineItem) -> Bool {
+            switch scopeFilter {
+            case .all:
+                return true
+            case .custom(let selection):
+                return selection.eventKinds.contains(item.kind)
+                    || (selection.includesUserEvents && item.isUserSourceEvent)
+            }
+        }
+
         var visibleOverviewGraphNodes: [OverviewGraphNode] {
             let visibleTimelineIDSet = Set(visibleIDs)
             return overviewGraphNodes.filter { node in
@@ -368,6 +428,18 @@ enum TraceViewer: StoreNamespace {
                 }
                 return visibleTimelineIDSet.contains(timelineID)
             }
+        }
+
+        var selectableVisibleOverviewGraphNodes: [OverviewGraphNode] {
+            let selectableVisibleIDSet = Set(selectableVisibleIDs)
+            return visibleOverviewGraphNodes.filter { node in
+                guard let selectionTimelineID = node.selectionTimelineID else { return false }
+                return selectableVisibleIDSet.contains(selectionTimelineID)
+            }
+        }
+
+        var selectableVisibleOverviewGraphNodeIDs: [String] {
+            selectableVisibleOverviewGraphNodes.map(\.id)
         }
 
         var selectedOverviewGraphNodeID: String? {
@@ -400,6 +472,26 @@ enum TraceViewer: StoreNamespace {
 
         func isCollapsed(_ id: String) -> Bool {
             collapsedIDs.contains(id)
+        }
+
+        func isEventKindSelected(_ kind: EventKind) -> Bool {
+            guard case .custom(let selection) = scopeFilter else { return false }
+            return selection.eventKinds.contains(kind)
+        }
+
+        func isSelectableTimelineID(_ id: String) -> Bool {
+            guard visibleIDs.contains(id),
+                  let item = itemsByID[id] else {
+                return false
+            }
+            return matchesScopeFilter(item)
+        }
+
+        func isSelectableOverviewGraphNodeID(_ id: String) -> Bool {
+            guard let selectionTimelineID = overviewGraphNodeByID[id]?.selectionTimelineID else {
+                return false
+            }
+            return isSelectableTimelineID(selectionTimelineID)
         }
 
         func hasChildren(_ id: String) -> Bool {
@@ -444,43 +536,122 @@ enum TraceViewer: StoreNamespace {
             return ancestors
         }
 
-        mutating func clampSelection() {
+        mutating func clampSelection(
+            anchorID: String? = nil,
+            prefersFirstSelectable: Bool = false
+        ) {
             let visibleIDs = visibleIDs
-            guard !visibleIDs.isEmpty else {
+            let selectableVisibleIDs = selectableVisibleIDs
+            guard !selectableVisibleIDs.isEmpty else {
                 selectedID = nil
                 return
             }
 
-            if let selectedID, visibleIDs.contains(selectedID) {
-                // Keep selection.
+            if let selectedID, selectableVisibleIDs.contains(selectedID) {
+                return
             }
-            else {
-                selectedID = visibleIDs.first
+
+            if prefersFirstSelectable {
+                selectedID = selectableVisibleIDs.first
+                return
             }
+
+            let selectableVisibleIDSet = Set(selectableVisibleIDs)
+            let anchorID = anchorID ?? selectedID
+            if let anchorID,
+               let anchorIndex = visibleIDs.firstIndex(of: anchorID) {
+                for candidateIndex in anchorIndex..<visibleIDs.count {
+                    let candidateID = visibleIDs[candidateIndex]
+                    if selectableVisibleIDSet.contains(candidateID) {
+                        selectedID = candidateID
+                        return
+                    }
+                }
+
+                if anchorIndex > 0 {
+                    for candidateIndex in stride(from: anchorIndex - 1, through: 0, by: -1) {
+                        let candidateID = visibleIDs[candidateIndex]
+                        if selectableVisibleIDSet.contains(candidateID) {
+                            selectedID = candidateID
+                            return
+                        }
+                    }
+                }
+            }
+
+            selectedID = selectableVisibleIDs.first
+        }
+
+        mutating func selectAllEventKinds() {
+            scopeFilter = .all
+            clampSelection(prefersFirstSelectable: true)
+        }
+
+        mutating func selectEvent(id: String) {
+            guard itemsByID[id] != nil else {
+                return
+            }
+            if !isSelectableTimelineID(id) {
+                scopeFilter = .all
+            }
+            selectedID = id
+        }
+
+        mutating func toggleEventKindFilter(_ kind: EventKind) {
+            switch scopeFilter {
+            case .all:
+                scopeFilter = .custom(.init(eventKinds: [kind]))
+            case .custom(var selection):
+                if selection.eventKinds.contains(kind) {
+                    selection.eventKinds.remove(kind)
+                }
+                else {
+                    selection.eventKinds.insert(kind)
+                }
+                scopeFilter = .custom(selection)
+            }
+            clampSelection(prefersFirstSelectable: true)
+        }
+
+        mutating func toggleUserEventFilter() {
+            switch scopeFilter {
+            case .all:
+                scopeFilter = .custom(.init(includesUserEvents: true))
+            case .custom(var selection):
+                selection.includesUserEvents.toggle()
+                scopeFilter = .custom(selection)
+            }
+            clampSelection(prefersFirstSelectable: true)
         }
 
         mutating func selectVisible(offset: Int) {
-            let visibleIDs = visibleIDs
-            guard !visibleIDs.isEmpty else { return }
+            let selectableVisibleIDs = selectableVisibleIDs
+            guard !selectableVisibleIDs.isEmpty else {
+                selectedID = nil
+                return
+            }
 
             if selectedID == nil {
-                selectedID = visibleIDs.first
+                selectedID = selectableVisibleIDs.first
                 return
             }
 
             guard let selectedID,
-                  let currentIndex = visibleIDs.firstIndex(of: selectedID) else {
-                self.selectedID = visibleIDs.first
+                  let currentIndex = selectableVisibleIDs.firstIndex(of: selectedID) else {
+                self.selectedID = selectableVisibleIDs.first
                 return
             }
 
-            let nextIndex = min(max(currentIndex + offset, 0), visibleIDs.count - 1)
-            self.selectedID = visibleIDs[nextIndex]
+            let nextIndex = min(max(currentIndex + offset, 0), selectableVisibleIDs.count - 1)
+            self.selectedID = selectableVisibleIDs[nextIndex]
         }
 
         mutating func selectGraphNode(offset: Int) {
-            let visibleNodes = visibleOverviewGraphNodes
-            guard !visibleNodes.isEmpty else { return }
+            let visibleNodes = selectableVisibleOverviewGraphNodes
+            guard !visibleNodes.isEmpty else {
+                selectedID = nil
+                return
+            }
 
             let step = offset > 0 ? 1 : -1
             let startIndex: Int = {
@@ -502,11 +673,11 @@ enum TraceViewer: StoreNamespace {
         }
 
         mutating func selectFirstVisible() {
-            selectedID = visibleIDs.first
+            selectedID = selectableVisibleIDs.first
         }
 
         mutating func selectLastVisible() {
-            selectedID = visibleIDs.last
+            selectedID = selectableVisibleIDs.last
         }
 
         mutating func focusOnSelection() {
@@ -524,13 +695,16 @@ enum TraceViewer: StoreNamespace {
         mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
             let previousSelectedID = selectedID
             let previousCollapsedIDs = collapsedIDs
+            let previousScopeFilter = scopeFilter
 
             self = .init(traceCollection: traceCollection)
+            scopeFilter = previousScopeFilter
             collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
-            if let previousSelectedID, itemsByID[previousSelectedID] != nil {
+            if let previousSelectedID,
+               itemsByID[previousSelectedID] != nil {
                 selectedID = previousSelectedID
             }
-            clampSelection()
+            clampSelection(anchorID: previousSelectedID)
         }
 
         static func makeItem(
@@ -1353,27 +1527,47 @@ extension TraceViewer {
         switch action {
         case .replaceTraceCollection(let traceCollection):
             state.replaceTraceCollection(traceCollection)
+            return .none
 
         case .selectEvent(let id):
-            state.selectedID = id
+            state.selectEvent(id: id)
+            return .action(.effect(.resetTimelineListFocus))
+
+        case .selectAllEventKinds:
+            state.selectAllEventKinds()
+            return .action(.effect(.resetTimelineListFocus))
+
+        case .toggleEventKindFilter(let kind):
+            state.toggleEventKindFilter(kind)
+            return .action(.effect(.resetTimelineListFocus))
+
+        case .toggleUserEventFilter:
+            state.toggleUserEventFilter()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectNextVisible:
             state.selectVisible(offset: 1)
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectPreviousVisible:
             state.selectVisible(offset: -1)
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectNextGraphNode:
             state.selectGraphNode(offset: 1)
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectPreviousGraphNode:
             state.selectGraphNode(offset: -1)
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectFirstVisible:
             state.selectFirstVisible()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .selectLastVisible:
             state.selectLastVisible()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .toggleCollapseSelected:
             guard let selectedID = state.selectedID else { break }
@@ -1385,37 +1579,50 @@ extension TraceViewer {
                 state.collapsedIDs.insert(selectedID)
             }
             state.clampSelection()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .collapseSelected:
             guard let selectedID = state.selectedID else { break }
             guard state.hasChildren(selectedID) else { break }
             state.collapsedIDs.insert(selectedID)
             state.clampSelection()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .expandSelected:
             guard let selectedID = state.selectedID else { break }
             state.collapsedIDs.remove(selectedID)
             state.clampSelection()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .collapseAll:
             for id in state.orderedIDs where state.hasChildren(id) {
                 state.collapsedIDs.insert(id)
             }
             state.clampSelection()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .expandAll:
             state.collapsedIDs.removeAll()
             state.clampSelection()
+            return .action(.effect(.resetTimelineListFocus))
 
         case .focusSelection:
             state.focusOnSelection()
+            return .action(.effect(.resetTimelineListFocus))
         }
         return .none
     }
 
     @MainActor
     static func runEffect(_ env: StoreEnvironment, _ state: StoreState, _ action: EffectAction) -> Store.Effect {
-        .none
+        switch action {
+        case .none:
+            return .none
+
+        case .resetTimelineListFocus:
+            env.resetTimelineListFocus()
+            return .none
+        }
     }
 }
 

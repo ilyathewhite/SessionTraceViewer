@@ -34,6 +34,10 @@ extension TraceViewer: StoreUINamespace {
 
                         Divider()
 
+                        scopeBarSection
+
+                        Divider()
+
                         HStack(spacing: 0) {
                             timelineListPanel
                                 .frame(width: timelineListWidth(for: geometry.size.width))
@@ -51,6 +55,13 @@ extension TraceViewer: StoreUINamespace {
             }
             .buttonStyle(.borderless)
             .preferredColorScheme(.light)
+            .connectOnAppear {
+                store.environment = .init(
+                    resetTimelineListFocus: {
+                        resetFocus(in: timelineFocusScope)
+                    }
+                )
+            }
         }
 
         private func timelineListWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -68,6 +79,7 @@ extension TraceViewer: StoreUINamespace {
         private var overviewPanel: some View {
             TimelineOverviewView(
                 nodes: store.state.visibleOverviewGraphNodes,
+                selectableNodeIDs: store.state.selectableVisibleOverviewGraphNodeIDs,
                 tooltipTextByNodeID: store.state.itemsByID.mapValues(\.title),
                 selectedNodeID: store.state.selectedOverviewGraphNodeID,
                 maxLane: store.state.overviewGraphMaxLane,
@@ -75,7 +87,7 @@ extension TraceViewer: StoreUINamespace {
                     guard let timelineID = store.state.timelineSelectionID(forOverviewGraphNodeID: graphNodeID) else {
                         return
                     }
-                    send(.selectEvent(id: timelineID))
+                    store.send(.mutating(.selectEvent(id: timelineID)))
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -92,6 +104,47 @@ extension TraceViewer: StoreUINamespace {
             .background(ViewerTheme.overviewAreaBackground)
         }
 
+        private var scopeBarSection: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ScopeBarButton(
+                        title: "All",
+                        isSelected: store.state.isAllEventKindsSelected,
+                        tint: ViewerTheme.secondaryText,
+                        isNeutral: true
+                    ) {
+                        store.send(.mutating(.selectAllEventKinds))
+                    }
+
+                    ScopeBarButton(
+                        title: "User",
+                        isSelected: store.state.isUserEventFilterSelected,
+                        tint: ViewerTheme.secondaryText,
+                        isNeutral: false
+                    ) {
+                        store.send(.mutating(.toggleUserEventFilter))
+                    }
+
+                    HStack(spacing: 4) {
+                        ForEach(store.state.scopeBarKinds, id: \.self) { kind in
+                            ScopeBarButton(
+                                title: kind.rawValue,
+                                isSelected: store.state.isEventKindSelected(kind),
+                                tint: ViewerTheme.color(for: kind),
+                                isNeutral: false
+                            ) {
+                                store.send(.mutating(.toggleEventKindFilter(kind)))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(ViewerTheme.background)
+        }
+
         private var timelineListPanel: some View {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -99,12 +152,13 @@ extension TraceViewer: StoreUINamespace {
                         ForEach(store.state.visibleItems) { item in
                             TimelineEventRow(
                                 item: item,
+                                isSelectable: store.state.isSelectableTimelineID(item.id),
                                 isSelected: item.id == store.state.selectedID,
                                 selectionIsFocused: selectionIsFocused
                             )
                             .id(item.id)
                             .onTapGesture {
-                                send(.selectEvent(id: item.id))
+                                store.send(.mutating(.selectEvent(id: item.id)))
                             }
                         }
                     }
@@ -120,9 +174,6 @@ extension TraceViewer: StoreUINamespace {
                 .onChange(of: store.state.selectedID) { _, id in
                     guard let id else { return }
                     proxy.scrollTo(id)
-                    if !timelineListHasFocus {
-                        resetFocus(in: timelineFocusScope)
-                    }
                 }
             }
             .background(ViewerTheme.timelinePanelBackground)
@@ -137,21 +188,17 @@ extension TraceViewer: StoreUINamespace {
             .background(ViewerTheme.inspectorPanelBackground)
         }
 
-        private func send(_ action: MutatingAction) {
-            store.send(.mutating(action))
-        }
-
         private func handleMove(_ direction: MoveCommandDirection) {
             guard timelineListHasFocus else { return }
             switch direction {
             case .up:
-                send(.selectPreviousVisible)
+                store.send(.mutating(.selectPreviousVisible))
             case .down:
-                send(.selectNextVisible)
+                store.send(.mutating(.selectNextVisible))
             case .left:
-                send(.selectPreviousGraphNode)
+                store.send(.mutating(.selectPreviousGraphNode))
             case .right:
-                send(.selectNextGraphNode)
+                store.send(.mutating(.selectNextGraphNode))
             default:
                 break
             }
@@ -159,8 +206,65 @@ extension TraceViewer: StoreUINamespace {
     }
 }
 
+private struct ScopeBarButton: View {
+    private enum Layout {
+        static let minWidth: CGFloat = 60
+    }
+
+    let title: String
+    let isSelected: Bool
+    let tint: Color
+    let isNeutral: Bool
+    let action: () -> Void
+
+    private var fillColor: Color {
+        guard isSelected else { return ViewerTheme.sectionBackground }
+        if isNeutral {
+            return ViewerTheme.rowSelectedFill
+        }
+        return tint.opacity(0.14)
+    }
+
+    private var strokeColor: Color {
+        guard isSelected else { return ViewerTheme.rowStroke }
+        if isNeutral {
+            return ViewerTheme.rowSelectedStroke
+        }
+        return tint.opacity(0.4)
+    }
+
+    private var textColor: Color {
+        guard isSelected else { return ViewerTheme.secondaryText }
+        if isNeutral {
+            return ViewerTheme.primaryText
+        }
+        return tint
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced).smallCaps())
+                .foregroundStyle(textColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .frame(minWidth: Layout.minWidth)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(fillColor)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(strokeColor, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct TimelineOverviewView: View {
     let nodes: [TraceViewer.StoreState.OverviewGraphNode]
+    let selectableNodeIDs: [String]
     let tooltipTextByNodeID: [String: String]
     let selectedNodeID: String?
     let maxLane: Int
@@ -171,6 +275,7 @@ private struct TimelineOverviewView: View {
     private let graphInset: CGFloat = 24
     private let nodeHitArea: CGFloat = 30
     private let tooltipMaxWidth: CGFloat = 240
+    private let mutedOpacity: Double = 0.26
     @State private var hoveredNodeID: String?
 
     private var maxColumn: Int {
@@ -310,6 +415,14 @@ private struct TimelineOverviewView: View {
         ViewerTheme.graphColor(for: kind)
     }
 
+    private func isSelectableNode(_ id: String) -> Bool {
+        selectableNodeIDs.contains(id)
+    }
+
+    private func graphOpacity(for nodeID: String) -> Double {
+        isSelectableNode(nodeID) ? 1 : mutedOpacity
+    }
+
     private func drawGraph(context: inout GraphicsContext, size: CGSize) {
         guard !nodes.isEmpty, size.width > 0, size.height > 0 else { return }
 
@@ -361,6 +474,9 @@ private struct TimelineOverviewView: View {
                         return ViewerTheme.dottedBranchLine
                     }
                 }()
+                let resolvedEdgeColor = edgeColor.opacity(
+                    min(graphOpacity(for: predecessorID), graphOpacity(for: node.id))
+                )
                 if fromLane == toLane, toPoint.x - fromPoint.x > nodeSpacing {
                     // Avoid drawing long same-lane lines through unrelated nodes.
                     // We cut tiny gaps around intermediate nodes on the same lane.
@@ -379,7 +495,7 @@ private struct TimelineOverviewView: View {
                         }
                         context.stroke(
                             directPath,
-                            with: .color(edgeColor),
+                            with: .color(resolvedEdgeColor),
                             style: strokeStyle
                         )
                     }
@@ -395,7 +511,7 @@ private struct TimelineOverviewView: View {
                                 }
                                 context.stroke(
                                     segmentPath,
-                                    with: .color(edgeColor),
+                                    with: .color(resolvedEdgeColor),
                                     style: strokeStyle
                                 )
                             }
@@ -408,7 +524,7 @@ private struct TimelineOverviewView: View {
                             }
                             context.stroke(
                                 tailPath,
-                                with: .color(edgeColor),
+                                with: .color(resolvedEdgeColor),
                                 style: strokeStyle
                             )
                         }
@@ -423,7 +539,7 @@ private struct TimelineOverviewView: View {
                     )
                     context.stroke(
                         connection,
-                        with: .color(edgeColor),
+                        with: .color(resolvedEdgeColor),
                         style: strokeStyle
                     )
                 }
@@ -434,7 +550,7 @@ private struct TimelineOverviewView: View {
             let center = point(for: node)
             let selected = node.id == selectedNodeID
             let radius = nodeRadius(selected: selected)
-            let fillColor = color(for: node.colorKind)
+            let fillColor = color(for: node.colorKind).opacity(graphOpacity(for: node.id))
 
             let nodeRect = CGRect(
                 x: center.x - radius,

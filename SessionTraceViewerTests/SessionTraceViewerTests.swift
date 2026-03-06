@@ -248,6 +248,120 @@ final class SessionTraceViewerTests: XCTestCase {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, visibleGraphNodes[1])
     }
 
+    func testToggleEventKindFilterKeepsTimelineAndOverviewVisible() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let visibleIDs = state.visibleIDs
+        let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
+        guard state.visibleItems.contains(where: { $0.kind == .mutation }) else {
+            throw XCTSkip("Trace did not contain mutation rows for filter coverage.")
+        }
+
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+
+        XCTAssertFalse(state.isAllEventKindsSelected)
+        XCTAssertTrue(state.isEventKindSelected(.state))
+        XCTAssertEqual(state.visibleIDs, visibleIDs)
+        XCTAssertEqual(state.visibleOverviewGraphNodes.map(\.id), visibleGraphNodeIDs)
+        XCTAssertTrue(state.selectableVisibleIDs.allSatisfy { id in
+            state.itemsByID[id]?.kind == .state
+        })
+    }
+
+    func testToggleUserEventFilterKeepsOnlyUserSourcedItemsSelectable() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let visibleIDs = state.visibleIDs
+        let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
+        guard state.visibleItems.contains(where: { $0.isUserSourceEvent }),
+              state.visibleItems.contains(where: { $0.subtitleSourceLabel == "CODE" }) else {
+            throw XCTSkip("Trace did not contain both USER and CODE sourced rows.")
+        }
+
+        _ = TraceViewer.reduce(&state, .toggleUserEventFilter)
+
+        XCTAssertFalse(state.isAllEventKindsSelected)
+        XCTAssertTrue(state.isUserEventFilterSelected)
+        XCTAssertEqual(state.visibleIDs, visibleIDs)
+        XCTAssertEqual(state.visibleOverviewGraphNodes.map(\.id), visibleGraphNodeIDs)
+        XCTAssertTrue(state.selectableVisibleIDs.allSatisfy { id in
+            state.itemsByID[id]?.isUserSourceEvent == true
+        })
+    }
+
+    func testFilterChangeSelectsFirstSelectableRowWhenCurrentSelectionIsFilteredOut() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let stateIDs = state.visibleItems
+            .filter { $0.kind == .state }
+            .map(\.id)
+        guard stateIDs.count > 1,
+              let lastMutationID = state.visibleItems.last(where: { $0.kind == .mutation })?.id else {
+            throw XCTSkip("Trace did not contain enough state rows and mutation rows for selection fallback coverage.")
+        }
+
+        _ = TraceViewer.reduce(&state, .selectEvent(id: lastMutationID))
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+
+        XCTAssertEqual(state.selectedID, stateIDs.first)
+    }
+
+    func testSelectEventOnFilteredItemRestoresAllAndSelectsIt() throws {
+        var state = try makeStateFromGeneratedTrace()
+        guard let stateID = state.visibleItems.first(where: { $0.kind == .state })?.id,
+              let mutationID = state.visibleItems.first(where: { $0.kind == .mutation })?.id else {
+            throw XCTSkip("Trace did not contain both state and mutation rows.")
+        }
+
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: stateID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: mutationID))
+
+        XCTAssertEqual(state.selectedID, mutationID)
+        XCTAssertTrue(state.isAllEventKindsSelected)
+    }
+
+    func testSelectAllEventKindsRestoresExclusiveAllSelection() throws {
+        var state = try makeStateFromGeneratedTrace()
+
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewer.reduce(&state, .selectAllEventKinds)
+
+        XCTAssertTrue(state.isAllEventKindsSelected)
+        XCTAssertEqual(state.selectableVisibleIDs, state.visibleIDs)
+    }
+
+    func testSelectNextVisibleSkipsFilteredItems() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let stateIDs = state.visibleItems
+            .filter { $0.kind == .state }
+            .map(\.id)
+        guard stateIDs.count > 1 else {
+            throw XCTSkip("Trace did not contain enough state rows for filtered navigation.")
+        }
+
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: stateIDs[0]))
+        _ = TraceViewer.reduce(&state, .selectNextVisible)
+
+        XCTAssertEqual(state.selectedID, stateIDs[1])
+    }
+
+    func testSelectNextGraphNodeSkipsFilteredItems() throws {
+        var state = try makeStateFromGeneratedTrace()
+        let stateGraphNodeIDs = state.visibleOverviewGraphNodes
+            .compactMap(\.selectionTimelineID)
+            .filter { id in
+                state.itemsByID[id]?.kind == .state
+            }
+        guard stateGraphNodeIDs.count > 1 else {
+            throw XCTSkip("Trace did not contain enough state graph nodes for filtered graph navigation.")
+        }
+
+        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewer.reduce(&state, .selectNextGraphNode)
+
+        XCTAssertEqual(state.selectedID, stateGraphNodeIDs[1])
+        XCTAssertEqual(state.selectedOverviewGraphNodeID, stateGraphNodeIDs[1])
+    }
+
     func testCollapseHidesDescendantsInTimelineAndOverview() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {

@@ -13,6 +13,7 @@ struct TimelineEventRowCard: View {
     }
 
     let item: TraceViewer.TimelineItem
+    let isSelectable: Bool
     let isSelected: Bool
     let selectionIsFocused: Bool
 
@@ -24,8 +25,8 @@ struct TimelineEventRowCard: View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(item.kind.rawValue.uppercased())
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    Text(item.kind.rawValue)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced).smallCaps())
                         .foregroundStyle(kindColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -60,6 +61,8 @@ struct TimelineEventRowCard: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 6)
         .viewerListCardStyle(selected: isSelected, isFocused: selectionIsFocused)
+        .saturation(isSelectable ? 1 : 0.2)
+        .opacity(isSelectable ? 1 : 0.45)
     }
 
     private var subtitleText: Text {
