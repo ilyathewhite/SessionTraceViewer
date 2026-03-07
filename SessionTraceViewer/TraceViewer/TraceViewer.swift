@@ -14,6 +14,7 @@ enum TraceViewer: StoreNamespace {
     struct StoreEnvironment {
         let resetTimelineListFocus: @MainActor () -> Void
         let scrollTimelineListToID: @MainActor (String) -> Void
+        let syncEventInspectorSelection: @MainActor (EventInspector.Selection) -> Void
     }
 
     enum MutatingAction {
@@ -40,6 +41,7 @@ enum TraceViewer: StoreNamespace {
         case none
         case resetTimelineListFocus
         case scrollTimelineListToID(String)
+        case syncEventInspectorSelection(EventInspector.Selection)
     }
 
     enum EventKind: String, Equatable, Hashable {
@@ -78,7 +80,7 @@ enum TraceViewer: StoreNamespace {
         let node: SessionGraph.Node
 
         var timeLabel: String {
-            InspectorFormatter.timestamp(date)
+            EventInspectorFormatter.timestamp(date)
         }
 
         var subtitleSourceLabel: String? {
@@ -472,6 +474,13 @@ enum TraceViewer: StoreNamespace {
             return nil
         }
 
+        var eventInspectorSelection: EventInspector.Selection {
+            .init(
+                item: selectedItem,
+                previousStateItem: selectedPreviousStateItem
+            )
+        }
+
         func isCollapsed(_ id: String) -> Bool {
             collapsedIDs.contains(id)
         }
@@ -804,7 +813,7 @@ enum TraceViewer: StoreNamespace {
             case .effect(let effect):
                 let effectName = effect.startedByActionID.flatMap { actionByID[$0.rawValue]?.actionCase }
                 let subtitle: String = {
-                    let details = InspectorFormatter.effectSubtitle(effect)
+                    let details = EventInspectorFormatter.effectSubtitle(effect)
                     if effect.kind == .action {
                         return "applied effect • single action"
                     }
@@ -1522,12 +1531,17 @@ extension TraceViewer {
     private static func followUpEffect(
         shouldResetTimelineListFocus: Bool,
         previousSelectedID: String?,
-        selectedID: String?
+        selectedID: String?,
+        previousEventInspectorSelection: EventInspector.Selection,
+        eventInspectorSelection: EventInspector.Selection
     ) -> Store.SyncEffect {
         var actions: [Store.Action] = []
 
         if shouldResetTimelineListFocus {
             actions.append(.effect(.resetTimelineListFocus))
+        }
+        if previousEventInspectorSelection != eventInspectorSelection {
+            actions.append(.effect(.syncEventInspectorSelection(eventInspectorSelection)))
         }
         if previousSelectedID != selectedID,
            let selectedID {
@@ -1552,6 +1566,7 @@ extension TraceViewer {
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
         let previousSelectedID = state.selectedID
+        let previousEventInspectorSelection = state.eventInspectorSelection
         var shouldResetTimelineListFocus = false
 
         switch action {
@@ -1642,7 +1657,9 @@ extension TraceViewer {
         return followUpEffect(
             shouldResetTimelineListFocus: shouldResetTimelineListFocus,
             previousSelectedID: previousSelectedID,
-            selectedID: state.selectedID
+            selectedID: state.selectedID,
+            previousEventInspectorSelection: previousEventInspectorSelection,
+            eventInspectorSelection: state.eventInspectorSelection
         )
     }
 
@@ -1658,6 +1675,10 @@ extension TraceViewer {
 
         case .scrollTimelineListToID(let id):
             env.scrollTimelineListToID(id)
+            return .none
+
+        case .syncEventInspectorSelection(let selection):
+            env.syncEventInspectorSelection(selection)
             return .none
         }
     }

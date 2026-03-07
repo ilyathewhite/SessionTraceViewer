@@ -22,6 +22,12 @@ extension TraceViewer: StoreUINamespace {
 
         init(_ store: Store) {
             self.store = store
+
+            store.addChildIfNeeded(
+                EventInspector.store(
+                    selection: store.state.eventInspectorSelection
+                )
+            )
         }
 
         var body: some View {
@@ -58,12 +64,16 @@ extension TraceViewer: StoreUINamespace {
             .preferredColorScheme(.light)
             .connectOnAppear {
                 let timelineListScrollCoordinator = timelineListScrollCoordinator
+                let eventInspectorStore = eventInspectorStore
                 store.environment = .init(
                     resetTimelineListFocus: {
                         resetFocus(in: timelineFocusScope)
                     },
                     scrollTimelineListToID: { id in
                         timelineListScrollCoordinator.scroll(to: id)
+                    },
+                    syncEventInspectorSelection: { selection in
+                        eventInspectorStore.send(.mutating(.updateSelection(selection)))
                     }
                 )
             }
@@ -79,6 +89,10 @@ extension TraceViewer: StoreUINamespace {
 
         private var selectionIsFocused: Bool {
             timelineListHasFocus && controlActiveState == .key
+        }
+
+        private var eventInspectorStore: EventInspector.Store {
+            store.child()!
         }
 
         private var overviewPanel: some View {
@@ -187,12 +201,9 @@ extension TraceViewer: StoreUINamespace {
         }
 
         private var inspectorPanel: some View {
-            EventInspectorView(
-                item: store.state.selectedItem,
-                previousStateItem: store.state.selectedPreviousStateItem
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ViewerTheme.inspectorPanelBackground)
+            eventInspectorStore.contentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(ViewerTheme.inspectorPanelBackground)
         }
 
         private func handleMove(_ direction: MoveCommandDirection) {

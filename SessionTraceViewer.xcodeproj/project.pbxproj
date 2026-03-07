@@ -14,8 +14,8 @@
 		09B2DD5529B8FEDF00C831B2 /* SessionTraceViewerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD5429B8FEDF00C831B2 /* SessionTraceViewerUITests.swift */; };
 		09B2DD5729B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD5629B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift */; };
 		09B2DD6529B8FF4400C831B2 /* ReducerArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 09B2DD6429B8FF4400C831B2 /* ReducerArchitecture */; };
-		09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */; };
-		09B2DD6A29B8FFAB00C831B2 /* EventInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */; };
+		09B2DD6829B8FFA100C831B2 /* EventInspectorFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6729B8FFA100C831B2 /* EventInspectorFormatting.swift */; };
+		09B2DD6A29B8FFAB00C831B2 /* EventInspectorUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD6929B8FFAB00C831B2 /* EventInspectorUI.swift */; };
 		09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */; };
 		09B2DD7829B99E8900C831B2 /* TraceViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7729B99E8900C831B2 /* TraceViewer.swift */; };
 		09B2DD7A29B99E9400C831B2 /* TraceViewerUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */; };
@@ -41,6 +41,7 @@
 		09F0A0122A00001200C831B2 /* LiveTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0112A00001100C831B2 /* LiveTrace.swift */; };
 		09F0A0152A00001500C831B2 /* LiveTraceUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0142A00001400C831B2 /* LiveTraceUI.swift */; };
 		09F0A0162A00001600C831B2 /* LiveTraceEnv.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */; };
+		09F0A0502A00005000C831B2 /* EventInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0512A00005100C831B2 /* EventInspector.swift */; };
 		09F0A0402A00004000C831B2 /* LiveTraceSessionDescriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0412A00004100C831B2 /* LiveTraceSessionDescriptionView.swift */; };
 		09F0A0422A00004200C831B2 /* LiveTraceSessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0432A00004300C831B2 /* LiveTraceSessionRow.swift */; };
 		09F0A0442A00004400C831B2 /* LiveTraceSessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0452A00004500C831B2 /* LiveTraceSessionDetailView.swift */; };
@@ -74,8 +75,8 @@
 		09B2DD5029B8FEDF00C831B2 /* SessionTraceViewerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SessionTraceViewerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B2DD5429B8FEDF00C831B2 /* SessionTraceViewerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceViewerUITests.swift; sourceTree = "<group>"; };
 		09B2DD5629B8FEDF00C831B2 /* SessionTraceViewerUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTraceViewerUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorFormatting.swift; sourceTree = "<group>"; };
-		09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspectorView.swift; sourceTree = "<group>"; };
+		09B2DD6729B8FFA100C831B2 /* EventInspectorFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspectorFormatting.swift; sourceTree = "<group>"; };
+		09B2DD6929B8FFAB00C831B2 /* EventInspectorUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspectorUI.swift; sourceTree = "<group>"; };
 		09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventRow.swift; sourceTree = "<group>"; };
 		09B2DD7729B99E8900C831B2 /* TraceViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewer.swift; sourceTree = "<group>"; };
 		09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerUI.swift; sourceTree = "<group>"; };
@@ -100,6 +101,7 @@
 		09F0A0112A00001100C831B2 /* LiveTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTrace.swift; sourceTree = "<group>"; };
 		09F0A0142A00001400C831B2 /* LiveTraceUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceUI.swift; sourceTree = "<group>"; };
 		09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceEnv.swift; sourceTree = "<group>"; };
+		09F0A0512A00005100C831B2 /* EventInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventInspector.swift; sourceTree = "<group>"; };
 		09F0A0412A00004100C831B2 /* LiveTraceSessionDescriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionDescriptionView.swift; sourceTree = "<group>"; };
 		09F0A0432A00004300C831B2 /* LiveTraceSessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionRow.swift; sourceTree = "<group>"; };
 		09F0A0452A00004500C831B2 /* LiveTraceSessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionDetailView.swift; sourceTree = "<group>"; };
@@ -158,7 +160,7 @@
 				09B2DD9629BB98C800C831B2 /* SessionTraceDocument */,
 				09B2DD7629B99E4700C831B2 /* TraceViewer */,
 				09F0A0132A00001300C831B2 /* LiveTrace */,
-				09B2DD6629B8FF6700C831B2 /* Inspector */,
+				09B2DD6629B8FF6700C831B2 /* EventInspector */,
 				09F0A0062A00000600C831B2 /* StringDiff */,
 				09B2DD7129B99A3300C831B2 /* TimelineEventRow.swift */,
 				09F0A0002A00000100C831B2 /* TimelineEventRowCard.swift */,
@@ -197,13 +199,14 @@
 			path = SessionTraceViewerUITests;
 			sourceTree = "<group>";
 		};
-		09B2DD6629B8FF6700C831B2 /* Inspector */ = {
+		09B2DD6629B8FF6700C831B2 /* EventInspector */ = {
 			isa = PBXGroup;
 			children = (
-				09B2DD6729B8FFA100C831B2 /* InspectorFormatting.swift */,
-				09B2DD6929B8FFAB00C831B2 /* EventInspectorView.swift */,
+				09F0A0512A00005100C831B2 /* EventInspector.swift */,
+				09B2DD6729B8FFA100C831B2 /* EventInspectorFormatting.swift */,
+				09B2DD6929B8FFAB00C831B2 /* EventInspectorUI.swift */,
 			);
-			path = Inspector;
+			path = EventInspector;
 			sourceTree = "<group>";
 		};
 		09B2DD7629B99E4700C831B2 /* TraceViewer */ = {
@@ -414,7 +417,7 @@
 			files = (
 				09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */,
 				09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */,
-				09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */,
+				09B2DD6829B8FFA100C831B2 /* EventInspectorFormatting.swift in Sources */,
 				09F0A0102A00001000C831B2 /* LiveTraceServer.swift in Sources */,
 				09F0A0122A00001200C831B2 /* LiveTrace.swift in Sources */,
 				09F0A0162A00001600C831B2 /* LiveTraceEnv.swift in Sources */,
@@ -437,10 +440,11 @@
 				09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */,
 				09B2DD8F29BB946800C831B2 /* SessionTraceDocument.swift in Sources */,
 				09B2DD3929B8FEDE00C831B2 /* SessionTraceViewerApp.swift in Sources */,
+				09F0A0502A00005000C831B2 /* EventInspector.swift in Sources */,
 				09B2DD7A29B99E9400C831B2 /* TraceViewerUI.swift in Sources */,
 				09F0A0032A00000300C831B2 /* StringDiff.swift in Sources */,
 				09B2DD7829B99E8900C831B2 /* TraceViewer.swift in Sources */,
-				09B2DD6A29B8FFAB00C831B2 /* EventInspectorView.swift in Sources */,
+				09B2DD6A29B8FFAB00C831B2 /* EventInspectorUI.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

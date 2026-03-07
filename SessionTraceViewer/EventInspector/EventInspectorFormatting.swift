@@ -1,5 +1,5 @@
 //
-//  InspectorFormatting.swift
+//  EventInspectorFormatting.swift
 //  SessionTraceViewer
 //
 //  Created by Ilya Belenkiy on 2/25/26.
@@ -8,7 +8,7 @@
 import Foundation
 import ReducerArchitecture
 
-enum InspectorFormatter {
+enum EventInspectorFormatter {
     struct ValueChange: Equatable {
         let oldValue: String
         let newValue: String
