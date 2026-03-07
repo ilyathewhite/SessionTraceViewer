@@ -1146,9 +1146,7 @@ final class SessionTraceViewerTests: XCTestCase {
             )
         )
         store.environment = .init(
-            makeDiffSections: { string1, string2 in
-                return StringDiff.StoreState.makeSections(string1: string1, string2: string2)
-            }
+            makeDiffSections: StringDiff.makeDiffSections
         )
 
         if case .notStarted = store.state.diffSections {
@@ -1158,7 +1156,7 @@ final class SessionTraceViewerTests: XCTestCase {
         }
         XCTAssertNil(store.state.diffSections.value)
 
-        let task = store.send(.mutating(.startLoadingIfNeeded))
+        let task = store.send(.effect(.loadDiffIfNeeded))
 
         if case .inProgress = store.state.diffSections {
         }
@@ -1181,6 +1179,107 @@ final class SessionTraceViewerTests: XCTestCase {
         XCTAssertEqual(store.state.diffHunks[0].newRangeLabel, "L2")
         XCTAssertEqual(store.state.selectedDiffIndex, 0)
         XCTAssertEqual(store.state.selectedDiffID, store.state.diffHunks[0].id)
+    }
+
+    func testLiveTraceReceiveHelloCreatesSessionAndSelectsIt() {
+        var state = LiveTrace.StoreState(port: 41234)
+        let startedAt = Date(timeIntervalSince1970: 100)
+        let metadata = SessionTraceLiveSessionMetadata(
+            sessionID: "session-z",
+            title: "Counter Trace",
+            storeName: "CounterStore",
+            hostName: "MacBook Pro",
+            processName: "Trace Host",
+            startedAt: startedAt
+        )
+
+        let effect = LiveTrace.reduce(&state, .receiveEnvelope(.hello(metadata)))
+
+        XCTAssertEqual(state.selectedSessionID, metadata.sessionID)
+        XCTAssertEqual(state.sessions.map(\.id), [metadata.sessionID])
+        XCTAssertEqual(state.selectedSession?.title, metadata.title)
+        XCTAssertEqual(state.selectedSession?.subtitleLines, ["CounterStore", "Trace Host", "MacBook Pro"])
+        XCTAssertEqual(state.selectedSession?.startedAt, startedAt)
+        XCTAssertEqual(syncedLiveTraceSessionID(in: effect), metadata.sessionID)
+    }
+
+    func testLiveTraceKeepsCurrentSelectionWhenNewerSessionArrives() {
+        var state = LiveTrace.StoreState()
+
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-z",
+                        title: "First Trace",
+                        storeName: "Store Z",
+                        hostName: "Host Z",
+                        processName: "Process Z",
+                        startedAt: .init(timeIntervalSince1970: 100)
+                    )
+                )
+            )
+        )
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-a",
+                        title: "Second Trace",
+                        storeName: "Store A",
+                        hostName: "Host A",
+                        processName: "Process A",
+                        startedAt: .init(timeIntervalSince1970: 200)
+                    )
+                )
+            )
+        )
+
+        XCTAssertEqual(state.selectedSessionID, "session-z")
+        XCTAssertEqual(state.sessions.first?.id, "session-a")
+    }
+
+    func testLiveTraceSessionNavigationFollowsSortedSidebarOrder() {
+        var state = LiveTrace.StoreState()
+
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-z",
+                        title: "First Trace",
+                        storeName: "Store Z",
+                        hostName: "Host Z",
+                        processName: "Process Z",
+                        startedAt: .init(timeIntervalSince1970: 100)
+                    )
+                )
+            )
+        )
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-a",
+                        title: "Second Trace",
+                        storeName: "Store A",
+                        hostName: "Host A",
+                        processName: "Process A",
+                        startedAt: .init(timeIntervalSince1970: 200)
+                    )
+                )
+            )
+        )
+
+        _ = LiveTrace.reduce(&state, .selectPreviousSession)
+        XCTAssertEqual(state.selectedSessionID, "session-a")
+
+        _ = LiveTrace.reduce(&state, .selectNextSession)
+        XCTAssertEqual(state.selectedSessionID, "session-z")
     }
 
     private func makeStateFromGeneratedTrace() throws -> TraceViewer.StoreState {
@@ -1300,6 +1399,24 @@ final class SessionTraceViewerTests: XCTestCase {
         timelineActions(in: effect).compactMap { action in
             guard case .effect(.scrollTimelineListToID(let id)) = action else { return nil }
             return id
+        }.last
+    }
+
+    private func liveTraceActions(in effect: LiveTrace.Store.SyncEffect) -> [LiveTrace.Store.Action] {
+        switch effect {
+        case .action(let action):
+            return [action]
+        case .actions(let actions):
+            return actions
+        case .none:
+            return []
+        }
+    }
+
+    private func syncedLiveTraceSessionID(in effect: LiveTrace.Store.SyncEffect) -> String? {
+        liveTraceActions(in: effect).compactMap { action in
+            guard case .effect(.syncTraceViewer(sessionID: let sessionID)) = action else { return nil }
+            return sessionID
         }.last
     }
 

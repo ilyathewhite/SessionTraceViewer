@@ -10,7 +10,7 @@ import Network
 import ReducerArchitecture
 
 final class LiveTraceServer {
-    enum Status: Equatable {
+    enum Status: Equatable, Sendable {
         case starting(UInt16)
         case listening(UInt16)
         case failed(String)

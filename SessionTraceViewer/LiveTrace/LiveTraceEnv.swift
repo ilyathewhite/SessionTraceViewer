@@ -1,0 +1,59 @@
+//
+//  LiveTraceEnv.swift
+//  SessionTraceViewer
+//
+//  Created by Codex on 3/7/26.
+//
+
+import Foundation
+import ReducerArchitecture
+
+extension LiveTrace {
+    @MainActor
+    static func liveUpdates(port: UInt16) -> AsyncStream<LiveUpdate> {
+        AsyncStream { continuation in
+            let server = LiveTraceServer(port: port)
+            server.onEnvelope = { envelope in
+                continuation.yield(.envelope(envelope))
+            }
+            server.onStatusChange = { status in
+                continuation.yield(.status(status))
+            }
+            continuation.onTermination = { _ in
+                server.stop()
+            }
+            server.start()
+        }
+    }
+
+    @MainActor
+    static func syncTraceViewer(
+        store: Store
+    ) -> @MainActor (_ sessionID: String, _ traceCollection: SessionTraceCollection) -> Void {
+        { [weak store] sessionID, traceCollection in
+            guard let store else { return }
+            syncTraceViewer(
+                store: store,
+                sessionID: sessionID,
+                traceCollection: traceCollection
+            )
+        }
+    }
+
+    @MainActor
+    static func syncTraceViewer(
+        store: Store,
+        sessionID: String,
+        traceCollection: SessionTraceCollection
+    ) {
+        if let traceViewerStore: TraceViewer.Store = store.child(key: sessionID) {
+            traceViewerStore.send(.mutating(.replaceTraceCollection(traceCollection)))
+        }
+        else {
+            store.addChild(
+                TraceViewer.store(traceCollection: traceCollection),
+                key: sessionID
+            )
+        }
+    }
+}

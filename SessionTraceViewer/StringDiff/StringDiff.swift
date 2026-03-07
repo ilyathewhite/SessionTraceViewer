@@ -21,14 +21,15 @@ enum StringDiff: StoreNamespace {
     }
 
     enum MutatingAction {
-        case startLoadingIfNeeded
-        case finishLoading([StoreState.DiffSection])
+        case loadDiff
+        case didLoadDiff([StoreState.DiffSection])
         case selectDiff(id: String)
         case selectPreviousDiff
         case selectNextDiff
     }
 
     enum EffectAction {
+        case loadDiffIfNeeded
         case loadDiff(string1: String, string2: String)
     }
 
@@ -170,7 +171,7 @@ enum StringDiff: StoreNamespace {
             self.string2Caption = string2Caption
             self.string2 = string2
             self.diffSections = diffSections
-                ?? .success(Self.makeSections(string1: string1, string2: string2))
+                ?? .success(StringDiff.makeDiffSections(string1: string1, string2: string2))
             self.selectedDiffIndex = selectedDiffIndex
             normalizeSelectedDiffIndex()
         }
@@ -213,6 +214,12 @@ enum StringDiff: StoreNamespace {
     }
 }
 
+extension StringDiff.PresentationStyle {
+    var isInlineEmbedded: Bool {
+        self == .inlineEmbedded
+    }
+}
+
 extension StringDiff {
     @MainActor
     static func store(
@@ -237,12 +244,12 @@ extension StringDiff {
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
         switch action {
-        case .startLoadingIfNeeded:
+        case .loadDiff:
             guard case .notStarted = state.diffSections else { return .none }
             state.diffSections = .inProgress
             return .action(.effect(.loadDiff(string1: state.string1, string2: state.string2)))
 
-        case .finishLoading(let sections):
+        case .didLoadDiff(let sections):
             state.diffSections = .success(sections)
             state.normalizeSelectedDiffIndex()
             return .none
@@ -264,10 +271,14 @@ extension StringDiff {
     @MainActor
     static func runEffect(_ env: StoreEnvironment, _ state: StoreState, _ action: EffectAction) -> Store.Effect {
         switch action {
+        case .loadDiffIfNeeded:
+            guard case .notStarted = state.diffSections else { return .none }
+            return .action(.mutating(.loadDiff))
+
         case .loadDiff(let string1, let string2):
             return .asyncAction {
                 async let sections = env.makeDiffSections(string1, string2)
-                return .mutating(.finishLoading(await sections))
+                return .mutating(.didLoadDiff(await sections))
             }
         }
     }

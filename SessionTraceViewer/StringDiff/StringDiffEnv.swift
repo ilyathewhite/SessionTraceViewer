@@ -31,16 +31,18 @@ extension StringDiff {
     static func windowStore(input: Input) -> Store {
         store(input: input, diffSections: .notStarted)
     }
-}
+    
+    typealias DiffLine = StoreState.DiffLine
+    typealias DiffRow = StoreState.DiffRow
+    typealias DiffSection = StoreState.DiffSection
 
-extension StringDiff.StoreState {
     private enum DiffOperation: Sendable {
         case equal(oldLineNumber: Int, newLineNumber: Int, text: String)
         case delete(oldLineNumber: Int, text: String)
         case insert(newLineNumber: Int, text: String)
     }
 
-    static func makeSections(string1: String, string2: String) -> [DiffSection] {
+    static func makeDiffSections(string1: String, string2: String) -> [DiffSection] {
         guard !Task.isCancelled else { return [] }
         let operations = diffOperations(
             oldLines: splitLines(string1),
@@ -266,20 +268,20 @@ extension StringDiff.StoreState {
             if Task.isCancelled { return nil }
             rows.append(
                 DiffRow(
-                id: "context-\(index)-\(oldLineNumber)-\(newLineNumber)",
-                oldLine: DiffLine(
-                    id: "context-old-\(index)-\(oldLineNumber)",
-                    lineNumber: oldLineNumber,
-                    text: plainAttributedString(for: text),
-                    kind: StringDiff.DiffLineKind.unchanged
-                ),
-                newLine: DiffLine(
-                    id: "context-new-\(index)-\(newLineNumber)",
-                    lineNumber: newLineNumber,
-                    text: plainAttributedString(for: text),
-                    kind: StringDiff.DiffLineKind.unchanged
+                    id: "context-\(index)-\(oldLineNumber)-\(newLineNumber)",
+                    oldLine: DiffLine(
+                        id: "context-old-\(index)-\(oldLineNumber)",
+                        lineNumber: oldLineNumber,
+                        text: plainAttributedString(for: text),
+                        kind: .unchanged
+                    ),
+                    newLine: DiffLine(
+                        id: "context-new-\(index)-\(newLineNumber)",
+                        lineNumber: newLineNumber,
+                        text: plainAttributedString(for: text),
+                        kind: .unchanged
+                    )
                 )
-            )
             )
         }
 
@@ -334,9 +336,9 @@ extension StringDiff.StoreState {
                             text: diffAttributedString(
                                 for: text,
                                 comparedTo: newLine?.1 ?? "",
-                                side: StringDiff.DiffSide.old
+                                side: .old
                             ),
-                            kind: StringDiff.DiffLineKind.old
+                            kind: .old
                         )
                     },
                     newLine: newLine.map { lineNumber, text in
@@ -346,9 +348,9 @@ extension StringDiff.StoreState {
                             text: diffAttributedString(
                                 for: text,
                                 comparedTo: oldLine?.1 ?? "",
-                                side: StringDiff.DiffSide.new
+                                side: .new
                             ),
-                            kind: StringDiff.DiffLineKind.new
+                            kind: .new
                         )
                     }
                 )

@@ -27,10 +27,23 @@
 		09F0A0032A00000300C831B2 /* StringDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0022A00000300C831B2 /* StringDiff.swift */; };
 		09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0042A00000500C831B2 /* StringDiffUI.swift */; };
 		09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */; };
+		09F0A0222A00002200C831B2 /* StringDiffWindowKeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0232A00002300C831B2 /* StringDiffWindowKeyboardShortcuts.swift */; };
+		09F0A0242A00002400C831B2 /* StringDiffLineCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0252A00002500C831B2 /* StringDiffLineCell.swift */; };
+		09F0A0262A00002600C831B2 /* StringDiffSectionRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0272A00002700C831B2 /* StringDiffSectionRows.swift */; };
+		09F0A0282A00002800C831B2 /* StringDiffColumnHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0292A00002900C831B2 /* StringDiffColumnHeader.swift */; };
+		09F0A02A2A00002A00C831B2 /* StringDiffInlineValueCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A02B2A00002B00C831B2 /* StringDiffInlineValueCard.swift */; };
+		09F0A02C2A00002C00C831B2 /* StringDiffDocumentSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A02D2A00002D00C831B2 /* StringDiffDocumentSection.swift */; };
+		09F0A02E2A00002E00C831B2 /* StringDiffLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A02F2A00002F00C831B2 /* StringDiffLoadingView.swift */; };
+		09F0A0302A00003000C831B2 /* StringDiffInlineLoadedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0312A00003100C831B2 /* StringDiffInlineLoadedView.swift */; };
+		09F0A0322A00003200C831B2 /* StringDiffWindowLoadedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0332A00003300C831B2 /* StringDiffWindowLoadedView.swift */; };
 		09F0A00C2A00000C00C831B2 /* SwiftUIEx in Frameworks */ = {isa = PBXBuildFile; productRef = 09F0A00D2A00000D00C831B2 /* SwiftUIEx */; };
 		09F0A0102A00001000C831B2 /* LiveTraceServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */; };
-		09F0A0122A00001200C831B2 /* LiveTraceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0112A00001100C831B2 /* LiveTraceStore.swift */; };
+		09F0A0122A00001200C831B2 /* LiveTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0112A00001100C831B2 /* LiveTrace.swift */; };
 		09F0A0152A00001500C831B2 /* LiveTraceUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0142A00001400C831B2 /* LiveTraceUI.swift */; };
+		09F0A0162A00001600C831B2 /* LiveTraceEnv.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */; };
+		09F0A0402A00004000C831B2 /* LiveTraceSessionDescriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0412A00004100C831B2 /* LiveTraceSessionDescriptionView.swift */; };
+		09F0A0422A00004200C831B2 /* LiveTraceSessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0432A00004300C831B2 /* LiveTraceSessionRow.swift */; };
+		09F0A0442A00004400C831B2 /* LiveTraceSessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F0A0452A00004500C831B2 /* LiveTraceSessionDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,9 +87,22 @@
 		09F0A0022A00000300C831B2 /* StringDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiff.swift; sourceTree = "<group>"; };
 		09F0A0042A00000500C831B2 /* StringDiffUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffUI.swift; sourceTree = "<group>"; };
 		09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffEnv.swift; sourceTree = "<group>"; };
+		09F0A0232A00002300C831B2 /* StringDiffWindowKeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffWindowKeyboardShortcuts.swift; sourceTree = "<group>"; };
+		09F0A0252A00002500C831B2 /* StringDiffLineCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffLineCell.swift; sourceTree = "<group>"; };
+		09F0A0272A00002700C831B2 /* StringDiffSectionRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffSectionRows.swift; sourceTree = "<group>"; };
+		09F0A0292A00002900C831B2 /* StringDiffColumnHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffColumnHeader.swift; sourceTree = "<group>"; };
+		09F0A02B2A00002B00C831B2 /* StringDiffInlineValueCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffInlineValueCard.swift; sourceTree = "<group>"; };
+		09F0A02D2A00002D00C831B2 /* StringDiffDocumentSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffDocumentSection.swift; sourceTree = "<group>"; };
+		09F0A02F2A00002F00C831B2 /* StringDiffLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffLoadingView.swift; sourceTree = "<group>"; };
+		09F0A0312A00003100C831B2 /* StringDiffInlineLoadedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffInlineLoadedView.swift; sourceTree = "<group>"; };
+		09F0A0332A00003300C831B2 /* StringDiffWindowLoadedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringDiffWindowLoadedView.swift; sourceTree = "<group>"; };
 		09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceServer.swift; sourceTree = "<group>"; };
-		09F0A0112A00001100C831B2 /* LiveTraceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceStore.swift; sourceTree = "<group>"; };
+		09F0A0112A00001100C831B2 /* LiveTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTrace.swift; sourceTree = "<group>"; };
 		09F0A0142A00001400C831B2 /* LiveTraceUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceUI.swift; sourceTree = "<group>"; };
+		09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceEnv.swift; sourceTree = "<group>"; };
+		09F0A0412A00004100C831B2 /* LiveTraceSessionDescriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionDescriptionView.swift; sourceTree = "<group>"; };
+		09F0A0432A00004300C831B2 /* LiveTraceSessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionRow.swift; sourceTree = "<group>"; };
+		09F0A0452A00004500C831B2 /* LiveTraceSessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTraceSessionDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -204,18 +230,47 @@
 				09F0A0022A00000300C831B2 /* StringDiff.swift */,
 				09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */,
 				09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
+				09F0A0342A00003400C831B2 /* Views */,
 			);
 			path = StringDiff;
+			sourceTree = "<group>";
+		};
+		09F0A0342A00003400C831B2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				09F0A0232A00002300C831B2 /* StringDiffWindowKeyboardShortcuts.swift */,
+				09F0A0252A00002500C831B2 /* StringDiffLineCell.swift */,
+				09F0A0272A00002700C831B2 /* StringDiffSectionRows.swift */,
+				09F0A0292A00002900C831B2 /* StringDiffColumnHeader.swift */,
+				09F0A02B2A00002B00C831B2 /* StringDiffInlineValueCard.swift */,
+				09F0A02D2A00002D00C831B2 /* StringDiffDocumentSection.swift */,
+				09F0A02F2A00002F00C831B2 /* StringDiffLoadingView.swift */,
+				09F0A0312A00003100C831B2 /* StringDiffInlineLoadedView.swift */,
+				09F0A0332A00003300C831B2 /* StringDiffWindowLoadedView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		09F0A0132A00001300C831B2 /* LiveTrace */ = {
 			isa = PBXGroup;
 			children = (
 				09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */,
-				09F0A0112A00001100C831B2 /* LiveTraceStore.swift */,
+				09F0A0112A00001100C831B2 /* LiveTrace.swift */,
+				09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */,
 				09F0A0142A00001400C831B2 /* LiveTraceUI.swift */,
+				09F0A0462A00004600C831B2 /* Views */,
 			);
 			path = LiveTrace;
+			sourceTree = "<group>";
+		};
+		09F0A0462A00004600C831B2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				09F0A0412A00004100C831B2 /* LiveTraceSessionDescriptionView.swift */,
+				09F0A0432A00004300C831B2 /* LiveTraceSessionRow.swift */,
+				09F0A0452A00004500C831B2 /* LiveTraceSessionDetailView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -361,10 +416,23 @@
 				09B2DD9529BB98C200C831B2 /* SessionTraceDocumentUI.swift in Sources */,
 				09B2DD6829B8FFA100C831B2 /* InspectorFormatting.swift in Sources */,
 				09F0A0102A00001000C831B2 /* LiveTraceServer.swift in Sources */,
-				09F0A0122A00001200C831B2 /* LiveTraceStore.swift in Sources */,
+				09F0A0122A00001200C831B2 /* LiveTrace.swift in Sources */,
+				09F0A0162A00001600C831B2 /* LiveTraceEnv.swift in Sources */,
 				09F0A0152A00001500C831B2 /* LiveTraceUI.swift in Sources */,
+				09F0A0402A00004000C831B2 /* LiveTraceSessionDescriptionView.swift in Sources */,
+				09F0A0422A00004200C831B2 /* LiveTraceSessionRow.swift in Sources */,
+				09F0A0442A00004400C831B2 /* LiveTraceSessionDetailView.swift in Sources */,
 				09F0A00B2A00000B00C831B2 /* StringDiffEnv.swift in Sources */,
 				09F0A0052A00000500C831B2 /* StringDiffUI.swift in Sources */,
+				09F0A0222A00002200C831B2 /* StringDiffWindowKeyboardShortcuts.swift in Sources */,
+				09F0A0242A00002400C831B2 /* StringDiffLineCell.swift in Sources */,
+				09F0A0262A00002600C831B2 /* StringDiffSectionRows.swift in Sources */,
+				09F0A0282A00002800C831B2 /* StringDiffColumnHeader.swift in Sources */,
+				09F0A02A2A00002A00C831B2 /* StringDiffInlineValueCard.swift in Sources */,
+				09F0A02C2A00002C00C831B2 /* StringDiffDocumentSection.swift in Sources */,
+				09F0A02E2A00002E00C831B2 /* StringDiffLoadingView.swift in Sources */,
+				09F0A0302A00003000C831B2 /* StringDiffInlineLoadedView.swift in Sources */,
+				09F0A0322A00003200C831B2 /* StringDiffWindowLoadedView.swift in Sources */,
 				09B2DD7229B99A3300C831B2 /* TimelineEventRow.swift in Sources */,
 				09F0A0012A00000100C831B2 /* TimelineEventRowCard.swift in Sources */,
 				09B2DD8F29BB946800C831B2 /* SessionTraceDocument.swift in Sources */,

@@ -9,12 +9,9 @@ import SwiftUI
 
 @main
 struct SessionTraceViewerApp: App {
-    @StateObject private var liveTraceStore = LiveTraceStore()
-
     var body: some Scene {
         WindowGroup("Live Traces") {
             LiveTraceWindowView()
-                .environmentObject(liveTraceStore)
         }
         .defaultSize(width: 960, height: 920)
 
