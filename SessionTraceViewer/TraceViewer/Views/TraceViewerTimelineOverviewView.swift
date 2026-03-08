@@ -4,6 +4,11 @@ extension TraceViewer {
     struct TimelineOverviewView: View {
         typealias Nsp = TraceViewer
 
+        private struct ScrollVisibilityInputs: Equatable {
+            let selectedNodeID: String?
+            let selectedNodeVisibleXRange: ClosedRange<CGFloat>?
+        }
+
         let nodes: [TraceViewer.StoreState.OverviewGraphNode]
         let selectableNodeIDs: [String]
         let tooltipTextByNodeID: [String: String]
@@ -17,7 +22,11 @@ extension TraceViewer {
         private let nodeHitArea: CGFloat = 30
         private let tooltipMaxWidth: CGFloat = 240
         private let mutedOpacity: Double = 0.26
+        private let scrollVisibilityPadding: CGFloat = 8
+        private let contentScrollTargetID = "overview-content"
         @State private var hoveredNodeID: String?
+        @State private var visibleRect: CGRect = .zero
+        @State private var pendingScrollAnimation: Bool?
 
         private var maxColumn: Int {
             nodes.map(\.column).max() ?? 0
@@ -47,13 +56,27 @@ extension TraceViewer {
 
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: true) {
-                        graphContent
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(width: graphWidth, height: graphHeight)
+                                .id(contentScrollTargetID)
+                            graphContent
+                        }
                     }
                     .onAppear {
-                        scrollToSelected(proxy)
+                        scheduleScrollToSelected(using: proxy, animated: false)
                     }
-                    .onChange(of: selectedNodeID) { _, _ in
-                        scrollToSelected(proxy)
+                    .onChange(of: scrollVisibilityInputs) { oldValue, newValue in
+                        scheduleScrollToSelected(
+                            using: proxy,
+                            animated: oldValue.selectedNodeID != newValue.selectedNodeID
+                        )
+                    }
+                    .onScrollGeometryChange(for: CGRect.self) { geometry in
+                        geometry.visibleRect
+                    } action: { _, newValue in
+                        visibleRect = newValue
+                        flushPendingScroll(using: proxy)
                     }
                 }
             }
@@ -71,7 +94,6 @@ extension TraceViewer {
                         .fill(Color.white.opacity(0.001))
                         .frame(width: nodeHitArea, height: nodeHitArea)
                         .position(point(for: node))
-                        .id(node.id)
                         .onTapGesture {
                             onSelectNode(node.id)
                         }
@@ -136,9 +158,87 @@ extension TraceViewer {
             return min(max(estimatedTextWidth + horizontalPadding, minWidth), tooltipMaxWidth)
         }
 
-        private func scrollToSelected(_ proxy: ScrollViewProxy) {
-            guard let selectedNodeID else { return }
-            proxy.scrollTo(selectedNodeID)
+        private var selectedNode: TraceViewer.StoreState.OverviewGraphNode? {
+            guard let selectedNodeID,
+                  let node = nodes.first(where: { $0.id == selectedNodeID }) else {
+                return nil
+            }
+            return node
+        }
+
+        private var selectedNodeVisibleXRange: ClosedRange<CGFloat>? {
+            guard let node = selectedNode else { return nil }
+            let selectionRadius = nodeRadius(selected: true) + 2.6 + scrollVisibilityPadding
+            let centerX = point(for: node).x
+            return max(centerX - selectionRadius, 0)...min(centerX + selectionRadius, graphWidth)
+        }
+
+        private var scrollVisibilityInputs: ScrollVisibilityInputs {
+            .init(
+                selectedNodeID: selectedNodeID,
+                selectedNodeVisibleXRange: selectedNodeVisibleXRange
+            )
+        }
+
+        private var desiredScrollOffset: CGFloat? {
+            guard let selectedNodeVisibleXRange,
+                  visibleRect.width > 0 else {
+                return nil
+            }
+
+            let maxScrollableX = max(graphWidth - visibleRect.width, 0)
+            guard maxScrollableX > 0 else { return 0 }
+
+            let currentOffset = min(max(visibleRect.minX, 0), maxScrollableX)
+            let visibleMinX = currentOffset
+            let visibleMaxX = currentOffset + visibleRect.width
+
+            if selectedNodeVisibleXRange.lowerBound >= visibleMinX,
+               selectedNodeVisibleXRange.upperBound <= visibleMaxX {
+                return currentOffset
+            }
+            if selectedNodeVisibleXRange.lowerBound < visibleMinX {
+                return max(selectedNodeVisibleXRange.lowerBound, 0)
+            }
+            return min(selectedNodeVisibleXRange.upperBound - visibleRect.width, maxScrollableX)
+        }
+
+        private func scheduleScrollToSelected(using proxy: ScrollViewProxy, animated: Bool) {
+            guard visibleRect.width > 0 else {
+                pendingScrollAnimation = animated
+                return
+            }
+            pendingScrollAnimation = nil
+            scrollToSelectedIfNeeded(proxy, animated: animated)
+        }
+
+        private func flushPendingScroll(using proxy: ScrollViewProxy) {
+            guard let animated = pendingScrollAnimation,
+                  visibleRect.width > 0 else {
+                return
+            }
+            pendingScrollAnimation = nil
+            scrollToSelectedIfNeeded(proxy, animated: animated)
+        }
+
+        private func scrollToSelectedIfNeeded(_ proxy: ScrollViewProxy, animated: Bool) {
+            guard let desiredScrollOffset else { return }
+            let maxScrollableX = max(graphWidth - visibleRect.width, 0)
+            guard maxScrollableX > 0 else { return }
+
+            let currentOffset = min(max(visibleRect.minX, 0), maxScrollableX)
+            guard abs(desiredScrollOffset - currentOffset) > 0.5 else { return }
+
+            let anchorX = min(max(desiredScrollOffset / maxScrollableX, 0), 1)
+            let anchor = UnitPoint(x: anchorX, y: 0.5)
+            if animated {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    proxy.scrollTo(contentScrollTargetID, anchor: anchor)
+                }
+            }
+            else {
+                proxy.scrollTo(contentScrollTargetID, anchor: anchor)
+            }
         }
 
         private func point(for node: TraceViewer.StoreState.OverviewGraphNode) -> CGPoint {
