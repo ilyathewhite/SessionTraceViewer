@@ -142,7 +142,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: targetID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
         XCTAssertEqual(state.selectedID, targetID)
         XCTAssertEqual(state.selectedOverviewGraphNodeID, targetID)
     }
@@ -155,7 +155,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID))
+        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: true))
 
         XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
         XCTAssertEqual(scrolledTimelineID(in: effect), targetID)
@@ -170,11 +170,26 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        let effect = TraceViewer.reduce(&state, .selectEvent(id: selectedID))
+        let effect = TraceViewer.reduce(&state, .selectEvent(id: selectedID, shouldFocus: true))
 
         XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
         XCTAssertNil(scrolledTimelineID(in: effect))
         XCTAssertNil(syncedEventInspectorSelection(in: effect))
+    }
+
+    @Test
+    func testSelectEventWithoutFocusRequestDoesNotEmitFocusReset() throws {
+        var state = try makeStateFromGeneratedTrace()
+        guard let targetID = state.visibleIDs.dropFirst().first else {
+            XCTFail("Trace did not contain enough visible nodes for selection effect test.")
+            return
+        }
+
+        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
+
+        XCTAssertFalse(containsResetTimelineListFocusAction(in: effect))
+        XCTAssertEqual(scrolledTimelineID(in: effect), targetID)
+        XCTAssertEqual(syncedEventInspectorSelection(in: effect), state.eventInspectorSelection)
     }
 
     @Test
@@ -201,7 +216,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: visibleGraphNodes[2]))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: visibleGraphNodes[2], shouldFocus: false))
         _ = TraceViewer.reduce(&state, .selectPreviousGraphNode)
 
         XCTAssertEqual(state.selectedID, visibleGraphNodes[1])
@@ -263,7 +278,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: lastMutationID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: lastMutationID, shouldFocus: false))
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
 
         XCTAssertEqual(state.selectedID, stateIDs.first)
@@ -279,8 +294,8 @@ extension ModelTests.TraceViewerModelTests {
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: stateID))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: mutationID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: stateID, shouldFocus: false))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: mutationID, shouldFocus: false))
 
         XCTAssertEqual(state.selectedID, mutationID)
         XCTAssertTrue(state.isAllEventKindsSelected)
@@ -309,7 +324,7 @@ extension ModelTests.TraceViewerModelTests {
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: stateIDs[0]))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: stateIDs[0], shouldFocus: false))
         _ = TraceViewer.reduce(&state, .selectNextVisible)
 
         XCTAssertEqual(state.selectedID, stateIDs[1])
@@ -349,7 +364,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
         _ = TraceViewer.reduce(&state, .collapseSelected)
 
         XCTAssertTrue(state.isCollapsed(collapsibleID))
@@ -367,7 +382,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID))
+        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
         _ = TraceViewer.reduce(&state, .collapseSelected)
 
         let traceCollection = state.traceCollection

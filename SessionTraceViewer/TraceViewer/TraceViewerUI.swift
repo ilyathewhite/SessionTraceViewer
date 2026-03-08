@@ -106,7 +106,7 @@ extension TraceViewer: StoreUINamespace {
                     guard let timelineID = store.state.timelineSelectionID(forOverviewGraphNodeID: graphNodeID) else {
                         return
                     }
-                    store.send(.mutating(.selectEvent(id: timelineID)))
+                    store.send(.mutating(.selectEvent(id: timelineID, shouldFocus: false)))
                 }
             )
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -177,7 +177,7 @@ extension TraceViewer: StoreUINamespace {
                             )
                             .id(item.id)
                             .onTapGesture {
-                                store.send(.mutating(.selectEvent(id: item.id)))
+                                store.send(.mutating(.selectEvent(id: item.id, shouldFocus: true)))
                             }
                         }
                     }

@@ -19,7 +19,7 @@ enum TraceViewer: StoreNamespace {
 
     enum MutatingAction {
         case replaceTraceCollection(SessionTraceCollection)
-        case selectEvent(id: String)
+        case selectEvent(id: String, shouldFocus: Bool)
         case selectAllEventKinds
         case toggleEventKindFilter(EventKind)
         case toggleUserEventFilter
@@ -1573,9 +1573,9 @@ extension TraceViewer {
         case .replaceTraceCollection(let traceCollection):
             state.replaceTraceCollection(traceCollection)
 
-        case .selectEvent(let id):
+        case .selectEvent(let id, let shouldFocus):
             state.selectEvent(id: id)
-            shouldResetTimelineListFocus = true
+            shouldResetTimelineListFocus = shouldFocus
 
         case .selectAllEventKinds:
             state.selectAllEventKinds()
