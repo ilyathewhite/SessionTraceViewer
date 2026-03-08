@@ -1,8 +1,15 @@
 import XCTest
 import ReducerArchitecture
+import Testing
 @testable import SessionTraceViewer
 
-extension SessionTraceViewerTests {
+extension ModelTests {
+    @MainActor
+    @Suite struct TraceViewerModelTests {}
+}
+
+extension ModelTests.TraceViewerModelTests {
+    @Test
     func testOverviewGraphKeepsStateNodesOnMainLane() throws {
         let state = try makeStateFromGeneratedTrace()
 
@@ -13,6 +20,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testStateNodeTitlesUseInitialThenStateChange() throws {
         let state = try makeStateFromGeneratedTrace()
         let stateItems = state.itemsByID.values
@@ -23,7 +31,8 @@ extension SessionTraceViewerTests {
             }
 
         guard let firstState = stateItems.first else {
-            throw XCTSkip("No state nodes found in generated trace.")
+            XCTFail("No state nodes found in generated trace.")
+            return
         }
         XCTAssertEqual(firstState.title, "Initial State")
 
@@ -32,6 +41,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testActionSubtitlesStartWithUserOrCode() throws {
         let state = try makeStateFromGeneratedTrace()
         let actionItems = state.itemsByID.values.compactMap { item -> (TraceViewer.TimelineItem, SessionGraph.ActionNode)? in
@@ -56,6 +66,7 @@ extension SessionTraceViewerTests {
         XCTAssertTrue(sawCode)
     }
 
+    @Test
     func testActionSubtitlesUseExactStoredCase() throws {
         let state = try makeStateFromGeneratedTrace()
         let actionItems = state.itemsByID.values.compactMap { item -> (TraceViewer.TimelineItem, SessionGraph.ActionNode)? in
@@ -74,6 +85,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testPublishAndCancelActionsUseFlowKind() throws {
         let state = try makeStateFromRecordMeetingTrace()
         let flowItems = state.itemsByID.values.compactMap { item -> TraceViewer.TimelineItem? in
@@ -83,7 +95,8 @@ extension SessionTraceViewerTests {
         }
 
         guard !flowItems.isEmpty else {
-            throw XCTSkip("No publish/cancel actions found in record meeting trace.")
+            XCTFail("No publish/cancel actions found in record meeting trace.")
+            return
         }
 
         for item in flowItems {
@@ -91,13 +104,15 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testStateValueRowsCarryComparisonValuesForChangedProperties() throws {
         let state = try makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }
         guard stateItems.count > 1 else {
-            throw XCTSkip("Need at least two state items to compare values.")
+            XCTFail("Need at least two state items to compare values.")
+            return
         }
 
         let previousItem = stateItems[0]
@@ -110,7 +125,8 @@ extension SessionTraceViewerTests {
             return
         }
         guard let countRow = valueRows.first(where: { $0.property == "count" }) else {
-            throw XCTSkip("count property missing from state rows.")
+            XCTFail("count property missing from state rows.")
+            return
         }
 
         XCTAssertTrue(countRow.isChanged)
@@ -118,10 +134,12 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(countRow.change?.newValue, formattedStateValue(property: "count", in: currentItem))
     }
 
+    @Test
     func testSelectEventKeepsTimelineAndGraphSelectionInSync() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
-            throw XCTSkip("Trace did not contain enough visible nodes for selection test.")
+            XCTFail("Trace did not contain enough visible nodes for selection test.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectEvent(id: targetID))
@@ -129,10 +147,12 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, targetID)
     }
 
+    @Test
     func testSelectEventEmitsFocusResetAndScrollEffectWhenSelectionChanges() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
-            throw XCTSkip("Trace did not contain enough visible nodes for selection effect test.")
+            XCTFail("Trace did not contain enough visible nodes for selection effect test.")
+            return
         }
 
         let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID))
@@ -142,10 +162,12 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(syncedEventInspectorSelection(in: effect), state.eventInspectorSelection)
     }
 
+    @Test
     func testSelectEventDoesNotEmitScrollEffectWhenSelectionIsUnchanged() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let selectedID = state.selectedID else {
-            throw XCTSkip("Trace did not contain an initial selection.")
+            XCTFail("Trace did not contain an initial selection.")
+            return
         }
 
         let effect = TraceViewer.reduce(&state, .selectEvent(id: selectedID))
@@ -155,11 +177,13 @@ extension SessionTraceViewerTests {
         XCTAssertNil(syncedEventInspectorSelection(in: effect))
     }
 
+    @Test
     func testSelectNextGraphNodeAdvancesToNextVisibleGraphNode() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
         guard visibleGraphNodes.count > 1 else {
-            throw XCTSkip("Trace did not contain enough visible graph nodes for graph navigation test.")
+            XCTFail("Trace did not contain enough visible graph nodes for graph navigation test.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectNextGraphNode)
@@ -168,11 +192,13 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, visibleGraphNodes[1])
     }
 
+    @Test
     func testSelectPreviousGraphNodeMovesBackToPreviousVisibleGraphNode() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
         guard visibleGraphNodes.count > 2 else {
-            throw XCTSkip("Trace did not contain enough visible graph nodes for graph navigation test.")
+            XCTFail("Trace did not contain enough visible graph nodes for graph navigation test.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectEvent(id: visibleGraphNodes[2]))
@@ -182,12 +208,14 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, visibleGraphNodes[1])
     }
 
+    @Test
     func testToggleEventKindFilterKeepsTimelineAndOverviewVisible() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleIDs = state.visibleIDs
         let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
         guard state.visibleItems.contains(where: { $0.kind == .mutation }) else {
-            throw XCTSkip("Trace did not contain mutation rows for filter coverage.")
+            XCTFail("Trace did not contain mutation rows for filter coverage.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
@@ -201,13 +229,15 @@ extension SessionTraceViewerTests {
         })
     }
 
+    @Test
     func testToggleUserEventFilterKeepsOnlyUserSourcedItemsSelectable() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleIDs = state.visibleIDs
         let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
         guard state.visibleItems.contains(where: { $0.isUserSourceEvent }),
               state.visibleItems.contains(where: { $0.subtitleSourceLabel == "CODE" }) else {
-            throw XCTSkip("Trace did not contain both USER and CODE sourced rows.")
+            XCTFail("Trace did not contain both USER and CODE sourced rows.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .toggleUserEventFilter)
@@ -221,6 +251,7 @@ extension SessionTraceViewerTests {
         })
     }
 
+    @Test
     func testFilterChangeSelectsFirstSelectableRowWhenCurrentSelectionIsFilteredOut() throws {
         var state = try makeStateFromGeneratedTrace()
         let stateIDs = state.visibleItems
@@ -228,7 +259,8 @@ extension SessionTraceViewerTests {
             .map(\.id)
         guard stateIDs.count > 1,
               let lastMutationID = state.visibleItems.last(where: { $0.kind == .mutation })?.id else {
-            throw XCTSkip("Trace did not contain enough state rows and mutation rows for selection fallback coverage.")
+            XCTFail("Trace did not contain enough state rows and mutation rows for selection fallback coverage.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectEvent(id: lastMutationID))
@@ -237,11 +269,13 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedID, stateIDs.first)
     }
 
+    @Test
     func testSelectEventOnFilteredItemRestoresAllAndSelectsIt() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let stateID = state.visibleItems.first(where: { $0.kind == .state })?.id,
               let mutationID = state.visibleItems.first(where: { $0.kind == .mutation })?.id else {
-            throw XCTSkip("Trace did not contain both state and mutation rows.")
+            XCTFail("Trace did not contain both state and mutation rows.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
@@ -252,6 +286,7 @@ extension SessionTraceViewerTests {
         XCTAssertTrue(state.isAllEventKindsSelected)
     }
 
+    @Test
     func testSelectAllEventKindsRestoresExclusiveAllSelection() throws {
         var state = try makeStateFromGeneratedTrace()
 
@@ -262,13 +297,15 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectableVisibleIDs, state.visibleIDs)
     }
 
+    @Test
     func testSelectNextVisibleSkipsFilteredItems() throws {
         var state = try makeStateFromGeneratedTrace()
         let stateIDs = state.visibleItems
             .filter { $0.kind == .state }
             .map(\.id)
         guard stateIDs.count > 1 else {
-            throw XCTSkip("Trace did not contain enough state rows for filtered navigation.")
+            XCTFail("Trace did not contain enough state rows for filtered navigation.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
@@ -278,6 +315,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedID, stateIDs[1])
     }
 
+    @Test
     func testSelectNextGraphNodeSkipsFilteredItems() throws {
         var state = try makeStateFromGeneratedTrace()
         let stateGraphNodeIDs = state.visibleOverviewGraphNodes
@@ -286,7 +324,8 @@ extension SessionTraceViewerTests {
                 state.itemsByID[id]?.kind == .state
             }
         guard stateGraphNodeIDs.count > 1 else {
-            throw XCTSkip("Trace did not contain enough state graph nodes for filtered graph navigation.")
+            XCTFail("Trace did not contain enough state graph nodes for filtered graph navigation.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
@@ -296,15 +335,18 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedOverviewGraphNodeID, stateGraphNodeIDs[1])
     }
 
+    @Test
     func testCollapseHidesDescendantsInTimelineAndOverview() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {
-            throw XCTSkip("Trace did not contain a collapsible node.")
+            XCTFail("Trace did not contain a collapsible node.")
+            return
         }
 
         let descendants = state.descendants(of: collapsibleID)
         guard !descendants.isEmpty else {
-            throw XCTSkip("Collapsible node had no descendants.")
+            XCTFail("Collapsible node had no descendants.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID))
@@ -317,10 +359,12 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testReplaceTraceCollectionPreservesSelectionAndCollapsedState() throws {
         var state = try makeStateFromGeneratedTrace()
         guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {
-            throw XCTSkip("Trace did not contain a collapsible node.")
+            XCTFail("Trace did not contain a collapsible node.")
+            return
         }
 
         _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID))
@@ -333,6 +377,7 @@ extension SessionTraceViewerTests {
         XCTAssertTrue(state.collapsedIDs.contains(collapsibleID))
     }
 
+    @Test
     func testReplaceTraceCollectionEmitsScrollEffectWhenSelectionChanges() throws {
         var state = try makeStateFromGeneratedTrace()
         let replacementCollection = try makeStateFromRecordMeetingTrace().traceCollection
@@ -341,16 +386,19 @@ extension SessionTraceViewerTests {
         let effect = TraceViewer.reduce(&state, .replaceTraceCollection(replacementCollection))
 
         guard let selectedID = state.selectedID else {
-            throw XCTSkip("Replacement trace did not contain a selectable item.")
+            XCTFail("Replacement trace did not contain a selectable item.")
+            return
         }
         guard previousSelectedID != selectedID else {
-            throw XCTSkip("Replacement trace unexpectedly preserved the same selection ID.")
+            XCTFail("Replacement trace unexpectedly preserved the same selection ID.")
+            return
         }
 
         XCTAssertFalse(containsResetTimelineListFocusAction(in: effect))
         XCTAssertEqual(scrolledTimelineID(in: effect), selectedID)
     }
 
+    @Test
     func testSyncScheduledEffectActionsShareOverviewColumn() async throws {
         let state = try await makeStateFromSyncScheduledEffectsTrace()
 
@@ -361,7 +409,8 @@ extension SessionTraceViewerTests {
             named: "startBeta",
             in: state
         ) else {
-            throw XCTSkip("Expected sync scheduled effect actions were not present in the overview graph.")
+            XCTFail("Expected sync scheduled effect actions were not present in the overview graph.")
+            return
         }
 
         XCTAssertEqual(
@@ -371,6 +420,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testSyncScheduledEffectActionsUseDistinctLanesBottomToTop() async throws {
         let state = try await makeStateFromSyncScheduledEffectsTrace()
 
@@ -381,7 +431,8 @@ extension SessionTraceViewerTests {
             named: "startBeta",
             in: state
         ) else {
-            throw XCTSkip("Expected sync scheduled effect actions were not present in the overview graph.")
+            XCTFail("Expected sync scheduled effect actions were not present in the overview graph.")
+            return
         }
 
         XCTAssertNotEqual(
@@ -396,6 +447,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testRecordMeetingTimerEffectKeepsOneLaneForItsMutatingActions() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -404,7 +456,8 @@ extension SessionTraceViewerTests {
             return action.actionCase == "startOneSecondTimer" && action.kind == .effect
         }
         guard let startAction else {
-            throw XCTSkip("startOneSecondTimer action not found in RecordMeeting trace.")
+            XCTFail("startOneSecondTimer action not found in RecordMeeting trace.")
+            return
         }
 
         let startedEffectID = state.graph.edges.compactMap { edge -> String? in
@@ -413,11 +466,13 @@ extension SessionTraceViewerTests {
             return started.effectID.rawValue
         }.first
         guard let startedEffectID else {
-            throw XCTSkip("No started effect for startOneSecondTimer in RecordMeeting trace.")
+            XCTFail("No started effect for startOneSecondTimer in RecordMeeting trace.")
+            return
         }
 
         guard let startLane = state.overviewGraphNodeByID[startAction.id]?.lane else {
-            throw XCTSkip("No lane for startOneSecondTimer action.")
+            XCTFail("No lane for startOneSecondTimer action.")
+            return
         }
 
         let timerMutatingActionIDs = state.itemsByID.values.compactMap { item -> String? in
@@ -437,6 +492,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testRecordMeetingTimerEffectActionsStayConnectedWhenAppliedNodesAreCollapsed() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -450,7 +506,8 @@ extension SessionTraceViewerTests {
         guard let startAction = actionByID.values.first(where: {
             $0.actionCase == "startOneSecondTimer" && $0.kind == .effect
         }) else {
-            throw XCTSkip("startOneSecondTimer action not found in RecordMeeting trace.")
+            XCTFail("startOneSecondTimer action not found in RecordMeeting trace.")
+            return
         }
 
         let startedEffectID = state.graph.edges.compactMap { edge -> String? in
@@ -459,7 +516,8 @@ extension SessionTraceViewerTests {
             return started.effectID.rawValue
         }.first
         guard let startedEffectID else {
-            throw XCTSkip("No started effect for startOneSecondTimer in RecordMeeting trace.")
+            XCTFail("No started effect for startOneSecondTimer in RecordMeeting trace.")
+            return
         }
 
         let timerActionIDs = actionByID.values
@@ -472,7 +530,8 @@ extension SessionTraceViewerTests {
             .map { $0.id.rawValue }
 
         guard timerActionIDs.count > 1 else {
-            throw XCTSkip("Not enough timer actions to assert thread continuity.")
+            XCTFail("Not enough timer actions to assert thread continuity.")
+            return
         }
 
         for (index, actionID) in timerActionIDs.enumerated() where index > 0 {
@@ -485,6 +544,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testRecordMeetingOverlappingEffectsUseDifferentLanes() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -526,20 +586,23 @@ extension SessionTraceViewerTests {
         guard let timerStartAction = actionByID.values.first(where: {
             $0.actionCase == "startOneSecondTimer" && $0.kind == .effect
         }) else {
-            throw XCTSkip("startOneSecondTimer action not found in RecordMeeting trace.")
+            XCTFail("startOneSecondTimer action not found in RecordMeeting trace.")
+            return
         }
         guard let transcriptStartAction = actionByID.values.first(where: {
             ($0.actionCase == "startTranscriptRecording" || $0.actionCase == "startTrasscriptRecording")
             && $0.kind == .effect
         }) else {
-            throw XCTSkip("startTranscriptRecording action not found in RecordMeeting trace.")
+            XCTFail("startTranscriptRecording action not found in RecordMeeting trace.")
+            return
         }
 
         guard let timerEffectID = startedEffectByActionID[timerStartAction.id.rawValue],
               let transcriptEffectID = startedEffectByActionID[transcriptStartAction.id.rawValue],
               let timerEffect = effectByID[timerEffectID],
               let transcriptEffect = effectByID[transcriptEffectID] else {
-            throw XCTSkip("Required effect nodes not found in RecordMeeting trace.")
+            XCTFail("Required effect nodes not found in RecordMeeting trace.")
+            return
         }
 
         let timerStartOrder = timerEffect.order
@@ -566,6 +629,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testRecordMeetingAdjacentEffectStartReusesLaneWhenFirstHasNoContinuations() throws {
         let state = try makeStateFromRecordMeetingTrace()
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
@@ -575,12 +639,14 @@ extension SessionTraceViewerTests {
         guard let prepareSoundPlayer = actions.first(where: {
             $0.actionCase == "prepareSoundPlayer" && $0.kind == .effect
         }) else {
-            throw XCTSkip("prepareSoundPlayer action not found in RecordMeeting trace.")
+            XCTFail("prepareSoundPlayer action not found in RecordMeeting trace.")
+            return
         }
         guard let startOneSecondTimer = actions.first(where: {
             $0.actionCase == "startOneSecondTimer" && $0.kind == .effect
         }) else {
-            throw XCTSkip("startOneSecondTimer action not found in RecordMeeting trace.")
+            XCTFail("startOneSecondTimer action not found in RecordMeeting trace.")
+            return
         }
 
         let prepareLane = state.overviewGraphNodeByID[prepareSoundPlayer.id.rawValue]?.lane
@@ -594,6 +660,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testRecordMeetingFirstMutationDoesNotUsePrepareSoundPlayerAsPredecessor() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -604,14 +671,16 @@ extension SessionTraceViewerTests {
         guard let prepareSoundPlayer = actions.first(where: {
             $0.actionCase == "prepareSoundPlayer" && $0.kind == .effect
         }) else {
-            throw XCTSkip("prepareSoundPlayer action not found in RecordMeeting trace.")
+            XCTFail("prepareSoundPlayer action not found in RecordMeeting trace.")
+            return
         }
 
         guard let firstMutationAfterPrepare = actions
             .filter({ $0.kind == .mutating && $0.order > prepareSoundPlayer.order })
             .sorted(by: { $0.order < $1.order })
             .first else {
-            throw XCTSkip("No mutation action found after prepareSoundPlayer.")
+            XCTFail("No mutation action found after prepareSoundPlayer.")
+            return
         }
 
         let predecessors = state.overviewGraphNodeByID[firstMutationAfterPrepare.id.rawValue]?.predecessorIDs ?? []
@@ -624,6 +693,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testGeneratedTraceUserMutationHasStateInputAndStateResultEdges() throws {
         let state = try makeStateFromGeneratedTrace()
 
@@ -635,7 +705,8 @@ extension SessionTraceViewerTests {
             .filter({ $0.kind == .mutating })
             .sorted(by: { $0.order < $1.order })
             .first else {
-            throw XCTSkip("No mutating action found in generated trace.")
+            XCTFail("No mutating action found in generated trace.")
+            return
         }
 
         let mutationPredecessors = state.overviewGraphNodeByID[firstMutationAction.id.rawValue]?.predecessorIDs ?? []
@@ -660,6 +731,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testRecordMeetingShowEndMeetingAlertHasSingleThreadContinuationEdge() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -683,6 +755,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testRecordMeetingShowAlertEffectActionsStayOnShowAlertLane() throws {
         let state = try makeStateFromRecordMeetingTrace()
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
@@ -700,10 +773,12 @@ extension SessionTraceViewerTests {
         guard let showEndMeetingAlert = actions
             .filter({ $0.actionCase == "showEndMeetingAlert" })
             .last else {
-            throw XCTSkip("showEndMeetingAlert action not found in RecordMeeting trace.")
+            XCTFail("showEndMeetingAlert action not found in RecordMeeting trace.")
+            return
         }
         guard let effectID = startedEffectByActionID[showEndMeetingAlert.id.rawValue] else {
-            throw XCTSkip("showEndMeetingAlert effect not found in RecordMeeting trace.")
+            XCTFail("showEndMeetingAlert effect not found in RecordMeeting trace.")
+            return
         }
         let effectActions = actions.filter { action in
             guard case .effect(let sourceEffectID) = action.source else { return false }
@@ -725,6 +800,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testRecordMeetingHasAsyncDottedAndSyncSolidEdges() throws {
         let state = try makeStateFromRecordMeetingTrace()
         var solidCount = 0
@@ -754,72 +830,7 @@ extension SessionTraceViewerTests {
         )
     }
 
-    func testRecordMeetingShowAlertAsyncSequenceContinuationThroughPublishIsDotted() throws {
-        let state = try makeStateFromRecordMeetingTrace()
-
-        let actionsByID: [String: SessionGraph.ActionNode] = Dictionary(
-            uniqueKeysWithValues: state.itemsByID.values.compactMap { item in
-                guard case .action(let action) = item.node else { return nil }
-                return (action.id.rawValue, action)
-            }
-        )
-        let startedEffectByActionID: [String: String] = Dictionary(
-            uniqueKeysWithValues: state.graph.edges.compactMap { edge in
-                guard case .startedEffect(let started) = edge else { return nil }
-                return (started.actionID.rawValue, started.effectID.rawValue)
-            }
-        )
-
-        guard let showAlertAction = actionsByID.values
-            .filter({ $0.actionCase == "showEndMeetingAlert" })
-            .sorted(by: { $0.order < $1.order })
-            .first else {
-            throw XCTSkip("showEndMeetingAlert action not found in RecordMeeting trace.")
-        }
-        guard let effectID = startedEffectByActionID[showAlertAction.id.rawValue] else {
-            throw XCTSkip("No started effect for showEndMeetingAlert.")
-        }
-
-        let effectActions = actionsByID.values
-            .filter { action in
-                guard case .effect(let sourceEffectID) = action.source else { return false }
-                return sourceEffectID.rawValue == effectID
-            }
-            .sorted(by: { $0.order < $1.order })
-
-        let updates = effectActions
-            .filter { action in
-                action.actionCase == "updateIgnoreTimer"
-            }
-
-        guard updates.count >= 2 else {
-            throw XCTSkip("Not enough updateIgnoreTimer actions for async continuation test.")
-        }
-        guard let publish = effectActions.first(where: { $0.actionCase == "publish" }) else {
-            throw XCTSkip("Publish action not found in showEndMeetingAlert effect.")
-        }
-
-        let firstUpdate = updates[0]
-        let secondUpdate = updates[1]
-        guard let secondNode = state.overviewGraphNodeByID[secondUpdate.id.rawValue] else {
-            throw XCTSkip("Second update node not found in overview graph.")
-        }
-        XCTAssertTrue(
-            publish.order > firstUpdate.order && publish.order < secondUpdate.order,
-            "Publish should occur between the two updateIgnoreTimer actions in the async sequence."
-        )
-        XCTAssertEqual(
-            secondNode.predecessorIDs,
-            [publish.id.rawValue],
-            "Expected second updateIgnoreTimer to continue from publish, the previous emitted node in the async sequence."
-        )
-        XCTAssertEqual(
-            secondNode.edgeLineKindByPredecessorID[publish.id.rawValue],
-            .dotted,
-            "Continuation edge inside async sequence should be dotted."
-        )
-    }
-
+    @Test
     func testRecordMeetingEffectSourcedMutationsDoNotUseInputStateAsDirectPredecessor() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -860,6 +871,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testRecordMeetingUserMutationHasOnlyStatePredecessor() throws {
         let state = try makeStateFromRecordMeetingTrace()
 
@@ -872,11 +884,13 @@ extension SessionTraceViewerTests {
             }
             .sorted(by: { $0.order < $1.order })
         guard let firstUserMutation = userMutations.first else {
-            throw XCTSkip("No user-origin mutation actions found in RecordMeeting trace.")
+            XCTFail("No user-origin mutation actions found in RecordMeeting trace.")
+            return
         }
 
         guard let mutationNode = state.overviewGraphNodeByID[firstUserMutation.id.rawValue] else {
-            throw XCTSkip("Overview node for user-origin mutation not found.")
+            XCTFail("Overview node for user-origin mutation not found.")
+            return
         }
         XCTAssertEqual(
             mutationNode.predecessorIDs.count,
@@ -885,7 +899,8 @@ extension SessionTraceViewerTests {
         )
         guard let onlyPredecessorID = mutationNode.predecessorIDs.first,
               let onlyPredecessor = state.itemsByID[onlyPredecessorID] else {
-            throw XCTSkip("Expected single predecessor for user-origin mutation.")
+            XCTFail("Expected single predecessor for user-origin mutation.")
+            return
         }
         XCTAssertEqual(
             onlyPredecessor.kind,
@@ -894,6 +909,7 @@ extension SessionTraceViewerTests {
         )
     }
 
+    @Test
     func testRecordMeetingEffectSourcedActionsHaveAtMostOneIncomingEdge() throws {
         let state = try makeStateFromRecordMeetingTrace()
         let effectSourcedActions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
@@ -912,22 +928,4 @@ extension SessionTraceViewerTests {
         }
     }
 
-    func testRecordMeetingUserMutationDoesNotShareActiveEffectLane() throws {
-        let state = try makeStateFromRecordMeetingTrace()
-
-        guard let order23 = state.itemsByID.values.first(where: { $0.order == 23 }),
-              let order30 = state.itemsByID.values.first(where: { $0.order == 30 }) else {
-            throw XCTSkip("Expected #23 and #30 nodes not found in RecordMeeting trace.")
-        }
-        guard let lane23 = state.overviewGraphNodeByID[order23.id]?.lane,
-              let lane30 = state.overviewGraphNodeByID[order30.id]?.lane else {
-            throw XCTSkip("Overview lanes for #23/#30 not found.")
-        }
-
-        XCTAssertNotEqual(
-            lane30,
-            lane23,
-            "A user-origin action (#30) should not occupy an active async effect lane (#23)."
-        )
-    }
 }

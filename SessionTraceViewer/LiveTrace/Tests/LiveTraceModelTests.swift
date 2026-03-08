@@ -1,9 +1,16 @@
 import Foundation
 import XCTest
 import ReducerArchitecture
+import Testing
 @testable import SessionTraceViewer
 
-extension SessionTraceViewerTests {
+extension ModelTests {
+    @MainActor
+    @Suite struct LiveTraceModelTests {}
+}
+
+extension ModelTests.LiveTraceModelTests {
+    @Test
     func testLiveTraceReceiveHelloCreatesSessionAndSelectsIt() {
         var state = LiveTrace.StoreState(port: 41234)
         let startedAt = Date(timeIntervalSince1970: 100)
@@ -26,6 +33,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(syncedLiveTraceSessionID(in: effect), metadata.sessionID)
     }
 
+    @Test
     func testLiveTraceKeepsCurrentSelectionWhenNewerSessionArrives() {
         var state = LiveTrace.StoreState()
 
@@ -64,6 +72,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.sessions.first?.id, "session-a")
     }
 
+    @Test
     func testLiveTraceSessionNavigationFollowsSortedSidebarOrder() {
         var state = LiveTrace.StoreState()
 

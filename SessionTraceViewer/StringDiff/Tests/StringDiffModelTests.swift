@@ -1,8 +1,15 @@
 import XCTest
 import ReducerArchitecture
+import Testing
 @testable import SessionTraceViewer
 
-extension SessionTraceViewerTests {
+extension ModelTests {
+    @MainActor
+    @Suite struct StringDiffModelTests {}
+}
+
+extension ModelTests.StringDiffModelTests {
+    @Test
     func testStringDiffGroupsSeparatedLineChangesIntoSeparateHunks() throws {
         let state = StringDiff.StoreState(
             title: "Diff",
@@ -20,6 +27,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(sections.count, 4)
     }
 
+    @Test
     func testStringDiffKeepsUnchangedLinesAsContextSections() throws {
         let state = StringDiff.StoreState(
             title: "Diff",
@@ -42,6 +50,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(sections[2].rows[0].newLine?.lineNumber, 3)
     }
 
+    @Test
     func testStringDiffUsesEmptyOldRangeForPureInsertionHunk() {
         let state = StringDiff.StoreState(
             title: "Diff",
@@ -59,6 +68,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.diffHunks[0].rows[0].newLine?.lineNumber, 2)
     }
 
+    @Test
     func testStringDiffKeepsWholeDocumentAsContextWhenThereAreNoChanges() throws {
         let state = StringDiff.StoreState(
             title: "Diff",
@@ -76,6 +86,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(sections[0].rows.map(\.id).count, 2)
     }
 
+    @Test
     func testStringDiffSelectsFirstDiffByDefault() {
         let state = StringDiff.StoreState(
             title: "Diff",
@@ -92,6 +103,7 @@ extension SessionTraceViewerTests {
         XCTAssertFalse(state.nextDiffDisabled)
     }
 
+    @Test
     func testStringDiffSelectionActionsUpdateStoreState() {
         var state = StringDiff.StoreState(
             title: "Diff",
@@ -117,6 +129,7 @@ extension SessionTraceViewerTests {
         XCTAssertEqual(state.selectedDiffID, state.diffHunks[1].id)
     }
 
+    @Test
     func testStringDiffStoreLoadsSectionsAsynchronouslyFromInput() async {
         let store = StringDiff.windowStore(
             input: .init(

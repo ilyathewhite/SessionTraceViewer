@@ -202,10 +202,6 @@
 				isa = PBXGroup;
 				children = (
 					09B2DD4A29B8FEDF00C831B2 /* SessionTraceViewerTests.swift */,
-					1F1FD62433044FE5A742A05B /* TraceViewer */,
-					76351733B2B949BD9BA083F1 /* EventInspector */,
-					018D1C3BBF0A4C0C8C9DCFDA /* StringDiff */,
-					B91F44926BEB45F983C4A503 /* LiveTrace */,
 				);
 				path = SessionTraceViewerTests;
 				sourceTree = "<group>";
@@ -226,6 +222,7 @@
 					FF1AAA493489433D89CB8255 /* EventInspectorEnv.swift */,
 					09B2DD6729B8FFA100C831B2 /* EventInspectorFormatting.swift */,
 					09B2DD6929B8FFAB00C831B2 /* EventInspectorUI.swift */,
+					D91DE17F9F8B4EA68D850E7F /* Tests */,
 				);
 				path = EventInspector;
 				sourceTree = "<group>";
@@ -236,6 +233,7 @@
 					09B2DD7729B99E8900C831B2 /* TraceViewer.swift */,
 					09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */,
 					C286B234A5724ADC9385EE8C /* Views */,
+					C07125AA93414563B6941AD3 /* Tests */,
 				);
 				path = TraceViewer;
 				sourceTree = "<group>";
@@ -249,17 +247,18 @@
 			path = SessionTraceDocument;
 			sourceTree = "<group>";
 		};
-		09F0A0062A00000600C831B2 /* StringDiff */ = {
-			isa = PBXGroup;
-			children = (
-				09F0A0022A00000300C831B2 /* StringDiff.swift */,
-				09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */,
-				09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
-				09F0A0342A00003400C831B2 /* Views */,
-			);
-			path = StringDiff;
-			sourceTree = "<group>";
-		};
+			09F0A0062A00000600C831B2 /* StringDiff */ = {
+				isa = PBXGroup;
+				children = (
+					09F0A0022A00000300C831B2 /* StringDiff.swift */,
+					09F0A00A2A00000A00C831B2 /* StringDiffEnv.swift */,
+					09F0A0042A00000500C831B2 /* StringDiffUI.swift */,
+					09F0A0342A00003400C831B2 /* Views */,
+					BDD34D8A648C4B2CA5E23A43 /* Tests */,
+				);
+				path = StringDiff;
+				sourceTree = "<group>";
+			};
 		09F0A0342A00003400C831B2 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -276,18 +275,19 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		09F0A0132A00001300C831B2 /* LiveTrace */ = {
-			isa = PBXGroup;
-			children = (
-				09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */,
-				09F0A0112A00001100C831B2 /* LiveTrace.swift */,
-				09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */,
-				09F0A0142A00001400C831B2 /* LiveTraceUI.swift */,
-				09F0A0462A00004600C831B2 /* Views */,
-			);
-			path = LiveTrace;
-			sourceTree = "<group>";
-		};
+			09F0A0132A00001300C831B2 /* LiveTrace */ = {
+				isa = PBXGroup;
+				children = (
+					09F0A00F2A00000F00C831B2 /* LiveTraceServer.swift */,
+					09F0A0112A00001100C831B2 /* LiveTrace.swift */,
+					09F0A0172A00001700C831B2 /* LiveTraceEnv.swift */,
+					09F0A0142A00001400C831B2 /* LiveTraceUI.swift */,
+					09F0A0462A00004600C831B2 /* Views */,
+					578F1312CA504118AE54508D /* Tests */,
+				);
+				path = LiveTrace;
+				sourceTree = "<group>";
+			};
 			09F0A0462A00004600C831B2 /* Views */ = {
 				isa = PBXGroup;
 				children = (
@@ -298,44 +298,12 @@
 				path = Views;
 				sourceTree = "<group>";
 			};
-			018D1C3BBF0A4C0C8C9DCFDA /* StringDiff */ = {
-				isa = PBXGroup;
-				children = (
-					BDD34D8A648C4B2CA5E23A43 /* Tests */,
-				);
-				path = StringDiff;
-				sourceTree = "<group>";
-			};
-			1F1FD62433044FE5A742A05B /* TraceViewer */ = {
-				isa = PBXGroup;
-				children = (
-					C07125AA93414563B6941AD3 /* Tests */,
-				);
-				path = TraceViewer;
-				sourceTree = "<group>";
-			};
 			578F1312CA504118AE54508D /* Tests */ = {
 				isa = PBXGroup;
 				children = (
 					D9F86326AEEC43AD89263C80 /* LiveTraceModelTests.swift */,
 				);
 				path = Tests;
-				sourceTree = "<group>";
-			};
-			76351733B2B949BD9BA083F1 /* EventInspector */ = {
-				isa = PBXGroup;
-				children = (
-					D91DE17F9F8B4EA68D850E7F /* Tests */,
-				);
-				path = EventInspector;
-				sourceTree = "<group>";
-			};
-			B91F44926BEB45F983C4A503 /* LiveTrace */ = {
-				isa = PBXGroup;
-				children = (
-					578F1312CA504118AE54508D /* Tests */,
-				);
-				path = LiveTrace;
 				sourceTree = "<group>";
 			};
 			BDD34D8A648C4B2CA5E23A43 /* Tests */ = {

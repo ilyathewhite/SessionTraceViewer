@@ -1,15 +1,23 @@
 import XCTest
 import ReducerArchitecture
+import Testing
 @testable import SessionTraceViewer
 
-extension SessionTraceViewerTests {
+extension ModelTests {
+    @MainActor
+    @Suite struct EventInspectorModelTests {}
+}
+
+extension ModelTests.EventInspectorModelTests {
+    @Test
     func testEventInspectorUpdateSelectionClearsTransientStateAndDismissesInlineDiff() throws {
         let state = try makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }
         guard stateItems.count > 1 else {
-            throw XCTSkip("Need at least two state items to exercise inspector selection updates.")
+            XCTFail("Need at least two state items to exercise inspector selection updates.")
+            return
         }
 
         let initialSelection = EventInspector.Selection(
@@ -40,13 +48,15 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testEventInspectorInspectDiffUsesInlinePresentationForShortChanges() throws {
         let state = try makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }
         guard stateItems.count > 1 else {
-            throw XCTSkip("Need at least two state items to exercise inspector diff presentation.")
+            XCTFail("Need at least two state items to exercise inspector diff presentation.")
+            return
         }
         let previousItem = stateItems[0]
         let currentItem = stateItems[1]
@@ -81,6 +91,7 @@ extension SessionTraceViewerTests {
         }
     }
 
+    @Test
     func testEventInspectorTreatsLargeDiffsAsWindowContent() {
         let largeChange = EventInspectorFormatter.ValueChange(
             oldValue: "a\nb\nc\nd\ne",
