@@ -29,10 +29,18 @@ extension LiveTrace: StoreUINamespace {
         }
 
         var body: some View {
-            NavigationSplitView {
+            HSplitView {
                 sidebar
-            } detail: {
+                    .frame(
+                        minWidth: 240,
+                        idealWidth: 280,
+                        maxWidth: 360,
+                        maxHeight: .infinity,
+                        alignment: .topLeading
+                    )
+
                 detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(minWidth: 1320, minHeight: 900)
             .connectOnAppear {
@@ -64,7 +72,6 @@ extension LiveTrace: StoreUINamespace {
 
                 sidebarSessions
             }
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
         }
 
         @ViewBuilder
