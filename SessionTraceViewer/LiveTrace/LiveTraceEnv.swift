@@ -25,35 +25,4 @@ extension LiveTrace {
             server.start()
         }
     }
-
-    @MainActor
-    static func syncTraceViewer(
-        store: Store
-    ) -> @MainActor (_ sessionID: String, _ traceCollection: SessionTraceCollection) -> Void {
-        { [weak store] sessionID, traceCollection in
-            guard let store else { return }
-            syncTraceViewer(
-                store: store,
-                sessionID: sessionID,
-                traceCollection: traceCollection
-            )
-        }
-    }
-
-    @MainActor
-    static func syncTraceViewer(
-        store: Store,
-        sessionID: String,
-        traceCollection: SessionTraceCollection
-    ) {
-        if let traceViewerStore: TraceViewer.Store = store.child(key: sessionID) {
-            traceViewerStore.send(.mutating(.replaceTraceCollection(traceCollection)))
-        }
-        else {
-            store.addChild(
-                TraceViewer.store(traceCollection: traceCollection),
-                key: sessionID
-            )
-        }
-    }
 }

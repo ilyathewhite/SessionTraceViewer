@@ -30,7 +30,7 @@ extension ModelTests.LiveTraceModelTests {
         XCTAssertEqual(state.selectedSession?.title, metadata.title)
         XCTAssertEqual(state.selectedSession?.subtitleLines, ["CounterStore", "Trace Host", "MacBook Pro"])
         XCTAssertEqual(state.selectedSession?.startedAt, startedAt)
-        XCTAssertEqual(syncedLiveTraceSessionID(in: effect), metadata.sessionID)
+        XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
     }
 
     @Test
@@ -112,5 +112,101 @@ extension ModelTests.LiveTraceModelTests {
 
         _ = LiveTrace.reduce(&state, .selectNextSession)
         XCTAssertEqual(state.selectedSessionID, "session-z")
+    }
+
+    @Test
+    func testSelectingSessionSyncsSelectedTraceViewer() {
+        var state = LiveTrace.StoreState()
+
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-z",
+                        title: "First Trace",
+                        storeName: "Store Z",
+                        hostName: "Host Z",
+                        processName: "Process Z",
+                        startedAt: .init(timeIntervalSince1970: 100)
+                    )
+                )
+            )
+        )
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-a",
+                        title: "Second Trace",
+                        storeName: "Store A",
+                        hostName: "Host A",
+                        processName: "Process A",
+                        startedAt: .init(timeIntervalSince1970: 200)
+                    )
+                )
+            )
+        )
+
+        let effect = LiveTrace.reduce(&state, .selectPreviousSession)
+
+        XCTAssertEqual(state.selectedSessionID, "session-a")
+        XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
+    }
+
+    @Test
+    func testLiveTraceDoesNotSyncTraceViewerForUnselectedSessionUpdate() {
+        var state = LiveTrace.StoreState()
+
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-z",
+                        title: "First Trace",
+                        storeName: "Store Z",
+                        hostName: "Host Z",
+                        processName: "Process Z",
+                        startedAt: .init(timeIntervalSince1970: 100)
+                    )
+                )
+            )
+        )
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-a",
+                        title: "Second Trace",
+                        storeName: "Store A",
+                        hostName: "Host A",
+                        processName: "Process A",
+                        startedAt: .init(timeIntervalSince1970: 200)
+                    )
+                )
+            )
+        )
+
+        let effect = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    .init(
+                        sessionID: "session-a",
+                        title: "Updated Trace",
+                        storeName: "Store A",
+                        hostName: "Host A",
+                        processName: "Process A",
+                        startedAt: .init(timeIntervalSince1970: 200)
+                    )
+                )
+            )
+        )
+
+        XCTAssertEqual(state.selectedSessionID, "session-z")
+        XCTAssertFalse(syncsSelectedLiveTraceViewer(in: effect))
     }
 }

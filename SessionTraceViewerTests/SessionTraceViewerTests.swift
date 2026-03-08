@@ -255,11 +255,13 @@ func liveTraceActions(in effect: LiveTrace.Store.SyncEffect) -> [LiveTrace.Store
     }
 }
 
-func syncedLiveTraceSessionID(in effect: LiveTrace.Store.SyncEffect) -> String? {
-    liveTraceActions(in: effect).compactMap { action in
-        guard case .effect(.syncTraceViewer(sessionID: let sessionID)) = action else { return nil }
-        return sessionID
-    }.last
+func syncsSelectedLiveTraceViewer(in effect: LiveTrace.Store.SyncEffect) -> Bool {
+    liveTraceActions(in: effect).contains { action in
+        if case .effect(.syncSelectedTraceViewer) = action {
+            return true
+        }
+        return false
+    }
 }
 
 func makeEventInspectorEnv() -> EventInspector.StoreEnvironment {

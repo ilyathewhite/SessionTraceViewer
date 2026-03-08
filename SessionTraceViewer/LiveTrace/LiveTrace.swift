@@ -13,7 +13,7 @@ enum LiveTrace: StoreNamespace {
 
     struct StoreEnvironment {
         let liveUpdates: @MainActor (_ port: UInt16) -> AsyncStream<LiveUpdate>
-        let syncTraceViewer: @MainActor (_ sessionID: String, _ traceCollection: SessionTraceCollection) -> Void
+        let syncTraceViewer: @MainActor (_ traceCollection: SessionTraceCollection) -> Void
     }
 
     enum MutatingAction {
@@ -28,7 +28,7 @@ enum LiveTrace: StoreNamespace {
     enum EffectAction {
         case startListeningIfNeeded
         case startListening
-        case syncTraceViewer(sessionID: String)
+        case syncSelectedTraceViewer
     }
 
     enum LiveUpdate: Sendable {
@@ -131,10 +131,6 @@ enum LiveTrace: StoreNamespace {
             return sessionsByID[selectedSessionID]
         }
 
-        func traceCollection(forSessionID sessionID: String) -> SessionTraceCollection? {
-            sessionsByID[sessionID]?.traceCollection
-        }
-
         mutating func selectSession(id: String) {
             guard sessionsByID[id] != nil else { return }
             selectedSessionID = id
@@ -215,16 +211,22 @@ extension LiveTrace {
             return .action(.effect(.startListening))
 
         case .selectSession(let id):
+            let previousSelectedSessionID = state.selectedSessionID
             state.selectSession(id: id)
-            return .none
+            guard state.selectedSessionID != previousSelectedSessionID else { return .none }
+            return .action(.effect(.syncSelectedTraceViewer))
 
         case .selectPreviousSession:
+            let previousSelectedSessionID = state.selectedSessionID
             state.selectRelativeSession(offset: -1)
-            return .none
+            guard state.selectedSessionID != previousSelectedSessionID else { return .none }
+            return .action(.effect(.syncSelectedTraceViewer))
 
         case .selectNextSession:
+            let previousSelectedSessionID = state.selectedSessionID
             state.selectRelativeSession(offset: 1)
-            return .none
+            guard state.selectedSessionID != previousSelectedSessionID else { return .none }
+            return .action(.effect(.syncSelectedTraceViewer))
 
         case .updateServerStatus(let status):
             state.updateServerStatus(status)
@@ -232,7 +234,8 @@ extension LiveTrace {
 
         case .receiveEnvelope(let envelope):
             state.receiveEnvelope(envelope)
-            return .action(.effect(.syncTraceViewer(sessionID: envelope.sessionID)))
+            guard state.selectedSessionID == envelope.sessionID else { return .none }
+            return .action(.effect(.syncSelectedTraceViewer))
         }
     }
 
@@ -244,11 +247,10 @@ extension LiveTrace {
             return .action(.mutating(.markListeningStarted))
 
         case .startListening:
-            let sessionIDs = state.sessions.map(\.id)
             let port = state.port
             return .asyncActionSequenceLatest(key: listenEffectKey) { send in
-                for sessionID in sessionIDs {
-                    send(.effect(.syncTraceViewer(sessionID: sessionID)))
+                if state.selectedSessionID != nil {
+                    send(.effect(.syncSelectedTraceViewer))
                 }
 
                 for await update in env.liveUpdates(port) {
@@ -261,12 +263,9 @@ extension LiveTrace {
                 }
             }
 
-        case .syncTraceViewer(let sessionID):
-            guard let traceCollection = state.traceCollection(forSessionID: sessionID) else {
-                assertionFailure("Missing live trace session \(sessionID)")
-                return .none
-            }
-            env.syncTraceViewer(sessionID, traceCollection)
+        case .syncSelectedTraceViewer:
+            guard let traceCollection = state.selectedSession?.traceCollection else { return .none }
+            env.syncTraceViewer(traceCollection)
             return .none
         }
     }

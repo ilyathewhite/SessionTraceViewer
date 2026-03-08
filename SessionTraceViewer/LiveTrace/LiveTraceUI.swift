@@ -17,6 +17,15 @@ extension LiveTrace: StoreUINamespace {
 
         init(_ store: Store) {
             self.store = store
+            store.addChildIfNeeded(
+                TraceViewer.store(
+                    traceCollection: store.state.selectedSession?.traceCollection
+                        ?? .placeholder(
+                            title: "Live Trace",
+                            sessionID: "live-trace.placeholder"
+                        )
+                )
+            )
         }
 
         var body: some View {
@@ -27,9 +36,12 @@ extension LiveTrace: StoreUINamespace {
             }
             .frame(minWidth: 1320, minHeight: 900)
             .connectOnAppear {
+                let traceViewerStore = traceViewerStore
                 store.environment = .init(
                     liveUpdates: Nsp.liveUpdates,
-                    syncTraceViewer: Nsp.syncTraceViewer(store: store)
+                    syncTraceViewer: { [weak traceViewerStore] traceCollection in
+                        traceViewerStore?.send(.mutating(.replaceTraceCollection(traceCollection)))
+                    }
                 )
                 store.send(.effect(.startListeningIfNeeded))
             }
@@ -60,7 +72,7 @@ extension LiveTrace: StoreUINamespace {
             if let session = store.state.selectedSession {
                 Nsp.SessionDetailView(
                     session: session,
-                    traceViewerStore: selectedTraceViewerStore
+                    traceViewerStore: traceViewerStore
                 )
             }
             else {
@@ -72,9 +84,8 @@ extension LiveTrace: StoreUINamespace {
             }
         }
 
-        private var selectedTraceViewerStore: TraceViewer.Store? {
-            guard let selectedSessionID = store.state.selectedSessionID else { return nil }
-            return store.child(key: selectedSessionID)
+        private var traceViewerStore: TraceViewer.Store {
+            store.child()!
         }
 
         private var sidebarSessions: some View {
