@@ -8,49 +8,41 @@ extension TraceViewer {
 
         let title: String
         let isSelected: Bool
-        let tint: Color
-        let isNeutral: Bool
+        let textColor: Color
+        let backgroundColor: Color
+        let strokeColor: Color
         let action: () -> Void
 
-        private var fillColor: Color {
+        private var resolvedFillColor: Color {
             guard isSelected else { return ViewerTheme.sectionBackground }
-            if isNeutral {
-                return ViewerTheme.rowSelectedFill
-            }
-            return tint.opacity(0.14)
+            return backgroundColor
         }
 
-        private var strokeColor: Color {
+        private var resolvedStrokeColor: Color {
             guard isSelected else { return ViewerTheme.rowStroke }
-            if isNeutral {
-                return ViewerTheme.rowSelectedStroke
-            }
-            return tint.opacity(0.4)
+            return strokeColor
         }
 
-        private var textColor: Color {
+        private var resolvedTextColor: Color {
             guard isSelected else { return ViewerTheme.secondaryText }
-            if isNeutral {
-                return ViewerTheme.primaryText
-            }
-            return tint
+            return textColor
         }
 
         var body: some View {
             Button(action: action) {
                 Text(title)
                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced).smallCaps())
-                    .foregroundStyle(textColor)
+                    .foregroundStyle(resolvedTextColor)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .frame(minWidth: Layout.minWidth)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(fillColor)
+                            .fill(resolvedFillColor)
                     )
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(strokeColor, lineWidth: 1)
+                            .stroke(resolvedStrokeColor, lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)

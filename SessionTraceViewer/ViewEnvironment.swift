@@ -55,7 +55,7 @@ enum ViewerTheme {
     static let diffNewHighlightText = rgb(26, 127, 55)
 
     static let stateFamily = SemanticFamily(
-        base: rgb(94, 104, 128),
+        base: rgb(118, 125, 42),
         graph: rgb(122, 134, 164)
     )
     static let mutationFamily = SemanticFamily(
@@ -95,6 +95,15 @@ enum ViewerTheme {
     static let secondaryText = Color(nsColor: .secondaryLabelColor)
     static let tertiaryText = Color(nsColor: .tertiaryLabelColor)
     static let inspectorPropertyText = rgb(112, 118, 126)
+    static let scopeBarAllText = rgb(70, 76, 84)
+    static let scopeBarAllBackground = rgb(230, 234, 238)
+    static let scopeBarAllStroke = rgb(184, 191, 198)
+    static let scopeBarFlowText = rgb(22, 74, 96)
+    static let scopeBarFlowBackground = rgb(224, 238, 244)
+    static let scopeBarFlowStroke = rgb(167, 192, 204)
+    static let scopeBarUserText = rgb(70, 76, 84)
+    static let scopeBarUserBackground = rgb(230, 234, 238)
+    static let scopeBarUserStroke = rgb(184, 191, 198)
 
     static func color(for kind: TraceViewer.EventKind) -> Color {
         switch kind {
@@ -128,6 +137,38 @@ enum ViewerTheme {
         }
     }
 
+    static func chipText(for kind: TraceViewer.EventColorKind) -> Color {
+        switch kind {
+        case .state:
+            return rgb(82, 89, 24)
+        case .mutation:
+            return rgb(31, 76, 40)
+        case .effect:
+            return rgb(104, 68, 20)
+        case .batch:
+            return rgb(78, 52, 75)
+        case .publish:
+            return rgb(18, 79, 70)
+        case .cancel:
+            return rgb(68, 74, 84)
+        }
+    }
+
+    static func chipText(for kind: TraceViewer.EventKind) -> Color {
+        switch kind {
+        case .state:
+            return chipText(for: TraceViewer.EventColorKind.state)
+        case .flow:
+            return scopeBarFlowText
+        case .mutation:
+            return chipText(for: TraceViewer.EventColorKind.mutation)
+        case .effect:
+            return chipText(for: TraceViewer.EventColorKind.effect)
+        case .batch:
+            return chipText(for: TraceViewer.EventColorKind.batch)
+        }
+    }
+
     static func graphColor(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
@@ -148,7 +189,7 @@ enum ViewerTheme {
     static func chipBackground(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return rgb(236, 240, 247)
+            return rgb(242, 245, 220)
         case .mutation:
             return rgb(232, 241, 233)
         case .effect:
@@ -162,20 +203,50 @@ enum ViewerTheme {
         }
     }
 
+    static func chipBackground(for kind: TraceViewer.EventKind) -> Color {
+        switch kind {
+        case .state:
+            return chipBackground(for: TraceViewer.EventColorKind.state)
+        case .flow:
+            return scopeBarFlowBackground
+        case .mutation:
+            return chipBackground(for: TraceViewer.EventColorKind.mutation)
+        case .effect:
+            return chipBackground(for: TraceViewer.EventColorKind.effect)
+        case .batch:
+            return chipBackground(for: TraceViewer.EventColorKind.batch)
+        }
+    }
+
     static func chipStroke(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return rgb(202, 210, 224)
+            return rgb(194, 200, 142)
         case .mutation:
-            return rgb(193, 215, 195)
+            return rgb(176, 196, 180)
         case .effect:
-            return rgb(227, 208, 183)
+            return rgb(208, 190, 164)
         case .batch:
-            return rgb(212, 193, 206)
+            return rgb(192, 178, 188)
         case .publish:
-            return rgb(190, 220, 214)
+            return rgb(170, 198, 191)
         case .cancel:
-            return rgb(208, 213, 220)
+            return rgb(188, 191, 197)
+        }
+    }
+
+    static func chipStroke(for kind: TraceViewer.EventKind) -> Color {
+        switch kind {
+        case .state:
+            return chipStroke(for: TraceViewer.EventColorKind.state)
+        case .flow:
+            return scopeBarFlowStroke
+        case .mutation:
+            return chipStroke(for: TraceViewer.EventColorKind.mutation)
+        case .effect:
+            return chipStroke(for: TraceViewer.EventColorKind.effect)
+        case .batch:
+            return chipStroke(for: TraceViewer.EventColorKind.batch)
         }
     }
 

@@ -129,8 +129,9 @@ extension TraceViewer: StoreUINamespace {
                     Nsp.ScopeBarButton(
                         title: "All",
                         isSelected: store.state.isAllEventKindsSelected,
-                        tint: ViewerTheme.secondaryText,
-                        isNeutral: true
+                        textColor: ViewerTheme.scopeBarAllText,
+                        backgroundColor: ViewerTheme.scopeBarAllBackground,
+                        strokeColor: ViewerTheme.scopeBarAllStroke
                     ) {
                         store.send(.mutating(.selectAllEventKinds))
                     }
@@ -138,8 +139,9 @@ extension TraceViewer: StoreUINamespace {
                     Nsp.ScopeBarButton(
                         title: "User",
                         isSelected: store.state.isUserEventFilterSelected,
-                        tint: ViewerTheme.secondaryText,
-                        isNeutral: false
+                        textColor: ViewerTheme.scopeBarUserText,
+                        backgroundColor: ViewerTheme.scopeBarUserBackground,
+                        strokeColor: ViewerTheme.scopeBarUserStroke
                     ) {
                         store.send(.mutating(.toggleUserEventFilter))
                     }
@@ -149,8 +151,9 @@ extension TraceViewer: StoreUINamespace {
                             Nsp.ScopeBarButton(
                                 title: kind.rawValue,
                                 isSelected: store.state.isEventKindSelected(kind),
-                                tint: ViewerTheme.color(for: kind),
-                                isNeutral: false
+                                textColor: ViewerTheme.chipText(for: kind),
+                                backgroundColor: ViewerTheme.chipBackground(for: kind),
+                                strokeColor: ViewerTheme.chipStroke(for: kind)
                             ) {
                                 store.send(.mutating(.toggleEventKindFilter(kind)))
                             }

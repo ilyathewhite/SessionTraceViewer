@@ -18,7 +18,7 @@ struct TimelineEventRowCard: View {
     let selectionIsFocused: Bool
 
     private var kindColor: Color {
-        ViewerTheme.color(for: item.colorKind)
+        ViewerTheme.chipText(for: item.colorKind)
     }
 
     var body: some View {
