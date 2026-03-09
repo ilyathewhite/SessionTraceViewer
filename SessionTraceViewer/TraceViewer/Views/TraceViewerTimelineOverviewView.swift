@@ -21,6 +21,7 @@ extension TraceViewer {
         private let graphInset: CGFloat = 24
         private let nodeHitArea: CGFloat = 30
         private let tooltipMaxWidth: CGFloat = 240
+        private let tooltipVerticalOffset: CGFloat = 22
         private let mutedOpacity: Double = 0.26
         private let scrollVisibilityPadding: CGFloat = 8
         private let selectionRingGap: CGFloat = 2
@@ -44,8 +45,24 @@ extension TraceViewer {
             return graphInset * 2 + CGFloat(maxColumn) * nodeSpacing
         }
 
+        private var minimumTooltipCenterY: CGFloat {
+            Nsp.GraphNodeTooltip.height / 2
+        }
+
+        private var additionalTopTooltipSpace: CGFloat {
+            max(ceil(minimumTooltipCenterY + tooltipVerticalOffset - graphInset), 0)
+        }
+
+        private var graphTopInset: CGFloat {
+            graphInset + additionalTopTooltipSpace
+        }
+
+        private var graphBottomInset: CGFloat {
+            graphInset
+        }
+
         private var graphHeight: CGFloat {
-            graphInset * 2 + CGFloat(max(laneCount - 1, 0)) * laneSpacing
+            graphTopInset + graphBottomInset + CGFloat(max(laneCount - 1, 0)) * laneSpacing
         }
 
         var body: some View {
@@ -148,7 +165,7 @@ extension TraceViewer {
         private func tooltipPosition(for nodePoint: CGPoint, tooltipWidth: CGFloat) -> CGPoint {
             let xPadding = tooltipWidth / 2 + 10
             let clampedX = min(max(nodePoint.x, xPadding), max(graphWidth - xPadding, xPadding))
-            let y = max(16, nodePoint.y - 22)
+            let y = max(minimumTooltipCenterY, nodePoint.y - tooltipVerticalOffset)
             return CGPoint(x: clampedX, y: y)
         }
 
@@ -246,7 +263,7 @@ extension TraceViewer {
         private func point(for node: TraceViewer.StoreState.OverviewGraphNode) -> CGPoint {
             CGPoint(
                 x: graphInset + CGFloat(node.column) * nodeSpacing,
-                y: graphHeight - graphInset - CGFloat(max(node.lane, 0)) * laneSpacing
+                y: graphHeight - graphBottomInset - CGFloat(max(node.lane, 0)) * laneSpacing
             )
         }
 
@@ -284,7 +301,7 @@ extension TraceViewer {
 
             // Draw only the baseline (main/state lane). Effect lanes are represented
             // by actual graph edges so unrelated effects do not look like one thread.
-            let mainLaneY = graphHeight - graphInset
+            let mainLaneY = graphHeight - graphBottomInset
             let mainLanePath = Path { path in
                 path.move(to: CGPoint(x: guideStartX, y: mainLaneY))
                 path.addLine(to: CGPoint(x: guideEndX, y: mainLaneY))
