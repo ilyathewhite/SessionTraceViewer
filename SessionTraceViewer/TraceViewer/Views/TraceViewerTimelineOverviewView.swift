@@ -23,6 +23,8 @@ extension TraceViewer {
         private let tooltipMaxWidth: CGFloat = 240
         private let mutedOpacity: Double = 0.26
         private let scrollVisibilityPadding: CGFloat = 8
+        private let selectionRingGap: CGFloat = 2
+        private let selectionRingThickness: CGFloat = 2
         private let contentScrollTargetID = "overview-content"
         @State private var hoveredNodeID: String?
         @State private var visibleRect: CGRect = .zero
@@ -168,7 +170,7 @@ extension TraceViewer {
 
         private var selectedNodeVisibleXRange: ClosedRange<CGFloat>? {
             guard let node = selectedNode else { return nil }
-            let selectionRadius = nodeRadius(selected: true) + 2.6 + scrollVisibilityPadding
+            let selectionRadius = selectionRingOuterRadius(for: nodeRadius(selected: true)) + scrollVisibilityPadding
             let centerX = point(for: node).x
             return max(centerX - selectionRadius, 0)...min(centerX + selectionRadius, graphWidth)
         }
@@ -250,6 +252,14 @@ extension TraceViewer {
 
         private func nodeRadius(selected: Bool) -> CGFloat {
             5
+        }
+
+        private func selectionRingInnerRadius(for nodeRadius: CGFloat) -> CGFloat {
+            nodeRadius + selectionRingGap
+        }
+
+        private func selectionRingOuterRadius(for nodeRadius: CGFloat) -> CGFloat {
+            selectionRingInnerRadius(for: nodeRadius) + selectionRingThickness
         }
 
         private func color(for kind: TraceViewer.EventColorKind) -> Color {
@@ -403,17 +413,27 @@ extension TraceViewer {
                 context.fill(Path(ellipseIn: nodeRect), with: .color(fillColor))
 
                 if selected {
-                    let ringRadius = radius + 2.6
-                    let ringRect = CGRect(
-                        x: center.x - ringRadius,
-                        y: center.y - ringRadius,
-                        width: ringRadius * 2,
-                        height: ringRadius * 2
+                    let outerRadius = selectionRingOuterRadius(for: radius)
+                    let innerRadius = selectionRingInnerRadius(for: radius)
+                    let outerRect = CGRect(
+                        x: center.x - outerRadius,
+                        y: center.y - outerRadius,
+                        width: outerRadius * 2,
+                        height: outerRadius * 2
                     )
-                    context.stroke(
-                        Path(ellipseIn: ringRect),
-                        with: .color(ViewerTheme.overviewSelectionRing),
-                        lineWidth: 1
+                    let innerRect = CGRect(
+                        x: center.x - innerRadius,
+                        y: center.y - innerRadius,
+                        width: innerRadius * 2,
+                        height: innerRadius * 2
+                    )
+                    var selectionRing = Path()
+                    selectionRing.addEllipse(in: outerRect)
+                    selectionRing.addEllipse(in: innerRect)
+                    context.fill(
+                        selectionRing,
+                        with: .color(fillColor),
+                        style: FillStyle(eoFill: true)
                     )
                 }
             }
