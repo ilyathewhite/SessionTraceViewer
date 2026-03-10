@@ -142,7 +142,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
         XCTAssertEqual(state.selectedID, targetID)
         XCTAssertEqual(state.selectedOverviewGraphNodeID, targetID)
     }
@@ -155,11 +155,10 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: true))
+        let effect = TraceViewerList.reduce(&state, .selectEvent(id: targetID, shouldFocus: true))
 
         XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
         XCTAssertEqual(scrolledTimelineID(in: effect), targetID)
-        XCTAssertEqual(syncedEventInspectorSelection(in: effect), state.eventInspectorSelection)
     }
 
     @Test
@@ -170,11 +169,10 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        let effect = TraceViewer.reduce(&state, .selectEvent(id: selectedID, shouldFocus: true))
+        let effect = TraceViewerList.reduce(&state, .selectEvent(id: selectedID, shouldFocus: true))
 
         XCTAssertTrue(containsResetTimelineListFocusAction(in: effect))
         XCTAssertNil(scrolledTimelineID(in: effect))
-        XCTAssertNil(syncedEventInspectorSelection(in: effect))
     }
 
     @Test
@@ -185,26 +183,35 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        let effect = TraceViewer.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
+        let effect = TraceViewerList.reduce(&state, .selectEvent(id: targetID, shouldFocus: false))
 
         XCTAssertFalse(containsResetTimelineListFocusAction(in: effect))
         XCTAssertEqual(scrolledTimelineID(in: effect), targetID)
-        XCTAssertEqual(syncedEventInspectorSelection(in: effect), state.eventInspectorSelection)
     }
 
     @Test
     func testSelectNextGraphNodeAdvancesToNextVisibleGraphNode() throws {
-        var state = try makeStateFromGeneratedTrace()
+        let state = try makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
         guard visibleGraphNodes.count > 1 else {
             XCTFail("Trace did not contain enough visible graph nodes for graph navigation test.")
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectNextGraphNode)
+        var graphState = state.graphState
+        let effect = TraceViewerGraph.reduce(
+            &graphState,
+            .selectAdjacentNode(offset: 1, shouldFocusTimelineList: false)
+        )
 
-        XCTAssertEqual(state.selectedID, visibleGraphNodes[1])
-        XCTAssertEqual(state.selectedOverviewGraphNodeID, visibleGraphNodes[1])
+        XCTAssertEqual(
+            publishedGraphSelection(in: effect),
+            .init(timelineID: visibleGraphNodes[1], shouldFocusTimelineList: false)
+        )
+        XCTAssertEqual(
+            graphState.presentation.selectedNodeID,
+            state.selectableVisibleOverviewGraphNodeIDs[1]
+        )
     }
 
     @Test
@@ -216,11 +223,21 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: visibleGraphNodes[2], shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .selectPreviousGraphNode)
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: visibleGraphNodes[2], shouldFocus: false))
+        var graphState = state.graphState
+        let effect = TraceViewerGraph.reduce(
+            &graphState,
+            .selectAdjacentNode(offset: -1, shouldFocusTimelineList: false)
+        )
 
-        XCTAssertEqual(state.selectedID, visibleGraphNodes[1])
-        XCTAssertEqual(state.selectedOverviewGraphNodeID, visibleGraphNodes[1])
+        XCTAssertEqual(
+            publishedGraphSelection(in: effect),
+            .init(timelineID: visibleGraphNodes[1], shouldFocusTimelineList: false)
+        )
+        XCTAssertEqual(
+            graphState.presentation.selectedNodeID,
+            state.selectableVisibleOverviewGraphNodeIDs[1]
+        )
     }
 
     @Test
@@ -233,7 +250,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
 
         XCTAssertFalse(state.isAllEventKindsSelected)
         XCTAssertTrue(state.isEventKindSelected(.state))
@@ -255,7 +272,7 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .toggleUserEventFilter)
+        _ = TraceViewerList.reduce(&state, .toggleUserEventFilter)
 
         XCTAssertFalse(state.isAllEventKindsSelected)
         XCTAssertTrue(state.isUserEventFilterSelected)
@@ -278,8 +295,8 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: lastMutationID, shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: lastMutationID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
 
         XCTAssertEqual(state.selectedID, stateIDs.first)
     }
@@ -293,9 +310,9 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: stateID, shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: mutationID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: stateID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: mutationID, shouldFocus: false))
 
         XCTAssertEqual(state.selectedID, mutationID)
         XCTAssertTrue(state.isAllEventKindsSelected)
@@ -305,8 +322,8 @@ extension ModelTests.TraceViewerModelTests {
     func testSelectAllEventKindsRestoresExclusiveAllSelection() throws {
         var state = try makeStateFromGeneratedTrace()
 
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectAllEventKinds)
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewerList.reduce(&state, .selectAllEventKinds)
 
         XCTAssertTrue(state.isAllEventKindsSelected)
         XCTAssertEqual(state.selectableVisibleIDs, state.visibleIDs)
@@ -323,9 +340,9 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectEvent(id: stateIDs[0], shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .selectNextVisible)
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: stateIDs[0], shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .selectNextVisible)
 
         XCTAssertEqual(state.selectedID, stateIDs[1])
     }
@@ -343,11 +360,21 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .toggleEventKindFilter(.state))
-        _ = TraceViewer.reduce(&state, .selectNextGraphNode)
+        _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
+        var graphState = state.graphState
+        let effect = TraceViewerGraph.reduce(
+            &graphState,
+            .selectAdjacentNode(offset: 1, shouldFocusTimelineList: true)
+        )
 
-        XCTAssertEqual(state.selectedID, stateGraphNodeIDs[1])
-        XCTAssertEqual(state.selectedOverviewGraphNodeID, stateGraphNodeIDs[1])
+        XCTAssertEqual(
+            publishedGraphSelection(in: effect),
+            .init(timelineID: stateGraphNodeIDs[1], shouldFocusTimelineList: true)
+        )
+        XCTAssertEqual(
+            graphState.presentation.selectedNodeID,
+            state.selectableVisibleOverviewGraphNodeIDs[1]
+        )
     }
 
     @Test
@@ -364,8 +391,8 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .collapseSelected)
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .collapseSelected)
 
         XCTAssertTrue(state.isCollapsed(collapsibleID))
         for descendantID in descendants {
@@ -382,11 +409,11 @@ extension ModelTests.TraceViewerModelTests {
             return
         }
 
-        _ = TraceViewer.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
-        _ = TraceViewer.reduce(&state, .collapseSelected)
+        _ = TraceViewerList.reduce(&state, .selectEvent(id: collapsibleID, shouldFocus: false))
+        _ = TraceViewerList.reduce(&state, .collapseSelected)
 
         let traceCollection = state.traceCollection
-        _ = TraceViewer.reduce(&state, .replaceTraceCollection(traceCollection))
+        _ = TraceViewerList.reduce(&state, .replaceTraceCollection(traceCollection))
 
         XCTAssertEqual(state.selectedID, collapsibleID)
         XCTAssertTrue(state.collapsedIDs.contains(collapsibleID))
@@ -398,7 +425,7 @@ extension ModelTests.TraceViewerModelTests {
         let replacementCollection = try makeStateFromRecordMeetingTrace().traceCollection
         let previousSelectedID = state.selectedID
 
-        let effect = TraceViewer.reduce(&state, .replaceTraceCollection(replacementCollection))
+        let effect = TraceViewerList.reduce(&state, .replaceTraceCollection(replacementCollection))
 
         guard let selectedID = state.selectedID else {
             XCTFail("Replacement trace did not contain a selectable item.")

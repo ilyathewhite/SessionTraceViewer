@@ -98,7 +98,7 @@ extension SyncScheduledEffectsFeature {
 }
 
 @MainActor
-func makeStateFromGeneratedTrace() throws -> TraceViewer.StoreState {
+func makeStateFromGeneratedTrace() throws -> TraceViewerList.StoreState {
     let name = "SessionTraceViewerTests-\(UUID().uuidString)"
     let store = TestTraceFeature.store()
     store.logConfig.sessionTraceFilename = name
@@ -111,11 +111,11 @@ func makeStateFromGeneratedTrace() throws -> TraceViewer.StoreState {
 
     let data = try Data(contentsOf: traceURL)
     let collection = try SessionTraceCollection(fileData: data)
-    return TraceViewer.StoreState(traceCollection: collection)
+    return TraceViewerList.StoreState(traceCollection: collection)
 }
 
 @MainActor
-func makeStateFromSyncScheduledEffectsTrace() async throws -> TraceViewer.StoreState {
+func makeStateFromSyncScheduledEffectsTrace() async throws -> TraceViewerList.StoreState {
     let name = "SessionTraceViewerSyncEffects-\(UUID().uuidString)"
     let store = SyncScheduledEffectsFeature.store()
     store.logConfig.sessionTraceFilename = name
@@ -129,14 +129,21 @@ func makeStateFromSyncScheduledEffectsTrace() async throws -> TraceViewer.StoreS
 
     let data = try Data(contentsOf: traceURL)
     let collection = try SessionTraceCollection(fileData: data)
-    return TraceViewer.StoreState(traceCollection: collection)
+    return TraceViewerList.StoreState(traceCollection: collection)
 }
 
-func makeStateFromRecordMeetingTrace() throws -> TraceViewer.StoreState {
+func makeStateFromRecordMeetingTrace() throws -> TraceViewerList.StoreState {
     let traceURL = URL(fileURLWithPath: "/Users/ilya/Development/RecordMeeting.lzma")
     let data = try Data(contentsOf: traceURL)
     let collection = try SessionTraceCollection(fileData: data)
-    return TraceViewer.StoreState(traceCollection: collection)
+    return TraceViewerList.StoreState(traceCollection: collection)
+}
+
+func makeGraphState(from state: TraceViewerList.StoreState) -> TraceViewerGraph.StoreState {
+    .init(
+        traceCollection: state.traceCollection,
+        input: state.graphInput
+    )
 }
 
 func savedTraceURL(named name: String) throws -> URL {
@@ -181,10 +188,22 @@ func exactCaseLabel(from code: String?) -> String? {
 
 func overviewEffectActionNode(
     named actionCase: String,
-    in state: TraceViewer.StoreState
-) -> TraceViewer.StoreState.OverviewGraphNode? {
-    state.overviewGraphNodes.first { node in
-        guard let item = state.itemsByID[node.id],
+    in state: TraceViewerList.StoreState
+) -> TraceViewerGraph.OverviewGraphNode? {
+    overviewEffectActionNode(
+        named: actionCase,
+        in: state.graphState,
+        itemsByID: state.itemsByID
+    )
+}
+
+func overviewEffectActionNode(
+    named actionCase: String,
+    in graphState: TraceViewerGraph.StoreState,
+    itemsByID: [String: TraceViewer.TimelineItem]
+) -> TraceViewerGraph.OverviewGraphNode? {
+    graphState.overviewGraphNodes.first { node in
+        guard let item = itemsByID[node.id],
               case .action(let action) = item.node else {
             return false
         }
@@ -192,7 +211,41 @@ func overviewEffectActionNode(
     }
 }
 
-func timelineActions(in effect: TraceViewer.Store.SyncEffect) -> [TraceViewer.Store.Action] {
+extension TraceViewerList.StoreState {
+    var graph: SessionGraph {
+        traceCollection.sessionGraph
+    }
+
+    var graphState: TraceViewerGraph.StoreState {
+        makeGraphState(from: self)
+    }
+
+    var overviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
+        graphState.overviewGraphNodes
+    }
+
+    var overviewGraphNodeByID: [String: TraceViewerGraph.OverviewGraphNode] {
+        graphState.overviewGraphNodeByID
+    }
+
+    var visibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
+        graphState.visibleOverviewGraphNodes
+    }
+
+    var selectableVisibleOverviewGraphNodeIDs: [String] {
+        graphState.selectableVisibleOverviewGraphNodeIDs
+    }
+
+    var selectedOverviewGraphNodeID: String? {
+        graphState.selectedOverviewGraphNodeID
+    }
+
+    var graphPresentation: TraceViewerGraph.Presentation {
+        graphState.presentation
+    }
+}
+
+func timelineActions(in effect: TraceViewerList.Store.SyncEffect) -> [TraceViewerList.Store.Action] {
     switch effect {
     case .action(let action):
         return [action]
@@ -216,7 +269,7 @@ func eventInspectorSyncActions(
     }
 }
 
-func containsResetTimelineListFocusAction(in effect: TraceViewer.Store.SyncEffect) -> Bool {
+func containsResetTimelineListFocusAction(in effect: TraceViewerList.Store.SyncEffect) -> Bool {
     timelineActions(in: effect).contains { action in
         if case .effect(.resetTimelineListFocus) = action {
             return true
@@ -225,20 +278,29 @@ func containsResetTimelineListFocusAction(in effect: TraceViewer.Store.SyncEffec
     }
 }
 
-func scrolledTimelineID(in effect: TraceViewer.Store.SyncEffect) -> String? {
+func scrolledTimelineID(in effect: TraceViewerList.Store.SyncEffect) -> String? {
     timelineActions(in: effect).compactMap { action in
         guard case .effect(.scrollTimelineListToID(let id)) = action else { return nil }
         return id
     }.last
 }
 
-func syncedEventInspectorSelection(
-    in effect: TraceViewer.Store.SyncEffect
-) -> EventInspector.Selection? {
-    timelineActions(in: effect).compactMap { action in
-        guard case .effect(.syncEventInspectorSelection(let selection)) = action else {
-            return nil
-        }
+func graphActions(in effect: TraceViewerGraph.Store.SyncEffect) -> [TraceViewerGraph.Store.Action] {
+    switch effect {
+    case .action(let action):
+        return [action]
+    case .actions(let actions):
+        return actions
+    case .none:
+        return []
+    }
+}
+
+func publishedGraphSelection(
+    in effect: TraceViewerGraph.Store.SyncEffect
+) -> TraceViewerGraph.PublishedValue? {
+    graphActions(in: effect).compactMap { action in
+        guard case .publish(let selection) = action else { return nil }
         return selection
     }
     .last

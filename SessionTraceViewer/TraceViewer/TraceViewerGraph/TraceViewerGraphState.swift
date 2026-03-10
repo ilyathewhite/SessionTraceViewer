@@ -1,14 +1,14 @@
 //
-//  TraceViewerState.swift
+//  TraceViewerGraphState.swift
 //  SessionTraceViewer
 //
-//  Created by Ilya Belenkiy on 3/8/26.
+//  Created by Codex on 3/10/26.
 //
 
 import Foundation
 import ReducerArchitecture
 
-extension TraceViewer.StoreState {
+extension TraceViewerGraph.StoreState {
     struct CommitGraphLayout {
         let laneByID: [String: Int]
         let predecessorIDsByID: [String: [String]]
@@ -18,274 +18,42 @@ extension TraceViewer.StoreState {
     }
 
     struct OverviewGraphPresentation {
-        let nodes: [OverviewGraphNode]
-        let nodeByID: [String: OverviewGraphNode]
+        let nodes: [TraceViewerGraph.OverviewGraphNode]
+        let nodeByID: [String: TraceViewerGraph.OverviewGraphNode]
         let graphIDByTimelineID: [String: String]
         let maxLane: Int
     }
 
-    private static var scopeBarEventKinds: [TraceViewer.EventKind] {
-        [
-            .state,
-            .mutation,
-            .effect,
-            .flow,
-        ]
-    }
-
-    init(traceCollection: SessionTraceCollection) {
-        self.traceCollection = traceCollection
-        self.graph = traceCollection.sessionGraph
-
-        var childrenByParentID: [String: [String]] = [:]
-        for edge in traceCollection.sessionGraph.edges {
-            switch edge {
-            case .nested(let nested):
-                childrenByParentID[nested.parentNodeID, default: []].append(nested.childNodeID)
-            case .contains(let contains):
-                childrenByParentID[contains.batchID.rawValue, default: []].append(contains.nodeID)
-            default:
-                break
-            }
-        }
-
-        let sortedNodes = traceCollection.sessionGraph.nodes
-            .sorted { lhs, rhs in
-                if lhs.order == rhs.order {
-                    return lhs.id < rhs.id
-                }
-                return lhs.order < rhs.order
-            }
-        let initialStateID = sortedNodes.compactMap { node -> String? in
-            guard case .state(let state) = node else { return nil }
-            return state.id.rawValue
-        }.first
-        let actionByID = Dictionary(
-            uniqueKeysWithValues: sortedNodes.compactMap { node -> (String, SessionGraph.ActionNode)? in
-                guard case .action(let action) = node else { return nil }
-                return (action.id.rawValue, action)
-            }
-        )
-        let indexByNodeID = Dictionary(
-            uniqueKeysWithValues: sortedNodes.enumerated().map { ($1.id, $0) }
-        )
-        let mutationsByActionID = Dictionary(
-            grouping: sortedNodes.compactMap { node -> SessionGraph.MutationNode? in
-                guard case .mutation(let mutation) = node else { return nil }
-                return mutation
-            },
-            by: \.actionID
-        )
-        let effectsByStartedActionID: [String: [SessionGraph.EffectNode]] = sortedNodes.reduce(
-            into: [:]
-        ) { partialResult, node in
-            guard case .effect(let effect) = node else { return }
-            guard let actionID = effect.startedByActionID, !actionID.isEmpty else { return }
-            partialResult[actionID.rawValue, default: []].append(effect)
-        }
-
-        var hiddenAppliedNodeIDs: Set<String> = []
-        for action in actionByID.values {
-            switch action.kind {
-            case .mutating:
-                for mutation in mutationsByActionID[action.id] ?? [] {
-                    if !Self.shouldShowAppliedNode(
-                        scheduledNodeID: action.id.rawValue,
-                        appliedNodeID: mutation.id.rawValue,
-                        indexByNodeID: indexByNodeID
-                    ) {
-                        hiddenAppliedNodeIDs.insert(mutation.id.rawValue)
-                    }
-                }
-            case .effect:
-                for effect in effectsByStartedActionID[action.id.rawValue] ?? [] {
-                    if !Self.shouldShowAppliedNode(
-                        scheduledNodeID: action.id.rawValue,
-                        appliedNodeID: effect.id.rawValue,
-                        indexByNodeID: indexByNodeID
-                    ) {
-                        hiddenAppliedNodeIDs.insert(effect.id.rawValue)
-                    }
-                }
-            default:
-                break
-            }
-        }
-
-        var visibleAppliedMutationActionIDs: Set<String> = []
-        for mutation in mutationsByActionID.values.joined() where !hiddenAppliedNodeIDs.contains(mutation.id.rawValue) {
-            visibleAppliedMutationActionIDs.insert(mutation.actionID.rawValue)
-        }
-        var visibleAppliedEffectActionIDs: Set<String> = []
-        for effect in effectsByStartedActionID.values.joined() where !hiddenAppliedNodeIDs.contains(effect.id.rawValue) {
-            if let startedByActionID = effect.startedByActionID {
-                visibleAppliedEffectActionIDs.insert(startedByActionID.rawValue)
-            }
-        }
-        let hiddenAppliedMutationByActionID = Dictionary(
-            uniqueKeysWithValues: mutationsByActionID
-                .compactMap { actionID, mutations -> (String, SessionGraph.MutationNode)? in
-                    guard !visibleAppliedMutationActionIDs.contains(actionID.rawValue) else { return nil }
-                    let hiddenMutations = mutations
-                        .filter { hiddenAppliedNodeIDs.contains($0.id.rawValue) }
-                        .sorted { lhs, rhs in lhs.order < rhs.order }
-                    guard let mutation = hiddenMutations.first else { return nil }
-                    return (actionID.rawValue, mutation)
-                }
-        )
-        let hiddenAppliedEffectByActionID = Dictionary(
-            uniqueKeysWithValues: effectsByStartedActionID
-                .compactMap { actionID, effects -> (String, SessionGraph.EffectNode)? in
-                    guard !visibleAppliedEffectActionIDs.contains(actionID) else { return nil }
-                    let hiddenEffects = effects
-                        .filter { hiddenAppliedNodeIDs.contains($0.id.rawValue) }
-                        .sorted { lhs, rhs in lhs.order < rhs.order }
-                    guard let effect = hiddenEffects.first else { return nil }
-                    return (actionID, effect)
-                }
-        )
-
-        var itemsByID: [String: TraceViewer.TimelineItem] = [:]
-        var orderedIDs: [String] = []
-        orderedIDs.reserveCapacity(sortedNodes.count)
-
-        for node in sortedNodes {
-            guard !hiddenAppliedNodeIDs.contains(node.id) else { continue }
-            guard let item = Self.makeItem(
-                node: node,
-                initialStateID: initialStateID,
-                childrenByParentID: childrenByParentID,
-                actionByID: actionByID,
-                visibleAppliedMutationActionIDs: visibleAppliedMutationActionIDs,
-                visibleAppliedEffectActionIDs: visibleAppliedEffectActionIDs,
-                hiddenAppliedMutationByActionID: hiddenAppliedMutationByActionID,
-                hiddenAppliedEffectByActionID: hiddenAppliedEffectByActionID
-            ) else {
-                continue
-            }
-            itemsByID[item.id] = item
-            orderedIDs.append(item.id)
-        }
-
-        let normalizedChildrenByParentID = childrenByParentID.mapValues { ids in
-            ids
-                .uniqued()
-                .filter { itemsByID[$0] != nil }
-                .sorted { lhs, rhs in
-                    guard let left = itemsByID[lhs], let right = itemsByID[rhs] else {
-                        return lhs < rhs
-                    }
-                    if left.order == right.order {
-                        return left.id < right.id
-                    }
-                    return left.order < right.order
-                }
-        }
-
-        var descendantCountByID: [String: Int] = [:]
-        func descendantCount(of id: String) -> Int {
-            if let cached = descendantCountByID[id] {
-                return cached
-            }
-
-            let children = normalizedChildrenByParentID[id] ?? []
-            let total = children.count + children.reduce(0) { partial, childID in
-                partial + descendantCount(of: childID)
-            }
-            descendantCountByID[id] = total
-            return total
-        }
-        for id in orderedIDs {
-            _ = descendantCount(of: id)
-        }
-
-        self.orderedIDs = orderedIDs
-        self.itemsByID = itemsByID
-        self.childrenByParentID = normalizedChildrenByParentID
-        self.descendantCountByID = descendantCountByID
-
-        let commitGraphLayout = Self.buildCommitGraphLayout(
+    init(traceCollection: SessionTraceCollection, input: TraceViewerGraph.Input) {
+        let timelineData = TraceViewer.TimelineData(traceCollection: traceCollection)
+        let commitGraphLayout = TraceViewerGraph.buildCommitGraphLayout(
             graph: traceCollection.sessionGraph,
-            orderedIDs: orderedIDs,
-            itemsByID: itemsByID,
-            parentByChildID: Self.makeParentByChildID(from: traceCollection.sessionGraph.edges)
+            orderedIDs: timelineData.orderedIDs,
+            itemsByID: timelineData.itemsByID,
+            parentByChildID: TraceViewerGraph.makeParentByChildID(from: traceCollection.sessionGraph.edges)
         )
-        let overviewGraphPresentation = Self.buildOverviewGraphPresentation(
-            orderedTimelineIDs: orderedIDs,
-            itemsByID: itemsByID,
+        let overviewGraphPresentation = TraceViewerGraph.buildOverviewGraphPresentation(
+            orderedTimelineIDs: timelineData.orderedIDs,
+            itemsByID: timelineData.itemsByID,
             laneByTimelineID: commitGraphLayout.laneByID,
             predecessorIDsByTimelineID: commitGraphLayout.predecessorIDsByID,
             edgeLineKindByPredecessorID: commitGraphLayout.edgeLineKindByPredecessorID,
             sharedColumnAnchorByID: commitGraphLayout.sharedColumnAnchorByID,
             maxTimelineLane: commitGraphLayout.maxLane
         )
-        self.overviewGraphNodes = overviewGraphPresentation.nodes
-        self.overviewGraphNodeByID = overviewGraphPresentation.nodeByID
-        self.overviewGraphIDByTimelineID = overviewGraphPresentation.graphIDByTimelineID
-        self.overviewGraphMaxLane = overviewGraphPresentation.maxLane
 
-        self.scopeFilter = .all
-        self.collapsedIDs = []
-        self.selectedID = orderedIDs.first
+        self.init(
+            timelineData: timelineData,
+            overviewGraphNodes: overviewGraphPresentation.nodes,
+            overviewGraphNodeByID: overviewGraphPresentation.nodeByID,
+            overviewGraphIDByTimelineID: overviewGraphPresentation.graphIDByTimelineID,
+            overviewGraphMaxLane: overviewGraphPresentation.maxLane,
+            input: input
+        )
     }
 
-    var visibleIDs: [String] {
-        var hiddenIDs: Set<String> = []
-        var visible: [String] = []
-        visible.reserveCapacity(orderedIDs.count)
-
-        for id in orderedIDs {
-            guard !hiddenIDs.contains(id) else { continue }
-            visible.append(id)
-
-            if collapsedIDs.contains(id) {
-                hiddenIDs.formUnion(descendants(of: id))
-            }
-        }
-        return visible
-    }
-
-    var visibleItems: [TraceViewer.TimelineItem] {
-        visibleIDs.compactMap { itemsByID[$0] }
-    }
-
-    var scopeBarKinds: [TraceViewer.EventKind] {
-        Self.scopeBarEventKinds
-    }
-
-    var isAllEventKindsSelected: Bool {
-        guard case .all = scopeFilter else { return false }
-        return true
-    }
-
-    var isUserEventFilterSelected: Bool {
-        switch scopeFilter {
-        case .all:
-            return false
-        case .custom(let selection):
-            return selection.includesUserEvents
-        }
-    }
-
-    var selectableVisibleIDs: [String] {
-        visibleIDs.filter { id in
-            guard let item = itemsByID[id] else { return false }
-            return matchesScopeFilter(item)
-        }
-    }
-
-    private func matchesScopeFilter(_ item: TraceViewer.TimelineItem) -> Bool {
-        switch scopeFilter {
-        case .all:
-            return true
-        case .custom(let selection):
-            return selection.eventKinds.contains(item.kind)
-                || (selection.includesUserEvents && item.isUserSourceEvent)
-        }
-    }
-
-    var visibleOverviewGraphNodes: [OverviewGraphNode] {
-        let visibleTimelineIDSet = Set(visibleIDs)
+    var visibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
+        let visibleTimelineIDSet = Set(input.visibleTimelineIDs)
         return overviewGraphNodes.filter { node in
             guard let timelineID = node.timelineID else {
                 return true
@@ -294,8 +62,8 @@ extension TraceViewer.StoreState {
         }
     }
 
-    var selectableVisibleOverviewGraphNodes: [OverviewGraphNode] {
-        let selectableVisibleIDSet = Set(selectableVisibleIDs)
+    var selectableVisibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
+        let selectableVisibleIDSet = Set(input.selectableTimelineIDs)
         return visibleOverviewGraphNodes.filter { node in
             guard let selectionTimelineID = node.selectionTimelineID else { return false }
             return selectableVisibleIDSet.contains(selectionTimelineID)
@@ -307,437 +75,79 @@ extension TraceViewer.StoreState {
     }
 
     var selectedOverviewGraphNodeID: String? {
-        guard let selectedID else { return nil }
-        return overviewGraphIDByTimelineID[selectedID]
+        guard let selectedTimelineID = input.selectedTimelineID else { return nil }
+        return overviewGraphIDByTimelineID[selectedTimelineID]
     }
 
-    var selectedItem: TraceViewer.TimelineItem? {
-        guard let selectedID else { return nil }
-        return itemsByID[selectedID]
-    }
-
-    var selectedPreviousStateItem: TraceViewer.TimelineItem? {
-        guard let selectedID,
-              let selectedItem = itemsByID[selectedID],
-              case .state = selectedItem.node,
-              let selectedIndex = orderedIDs.firstIndex(of: selectedID),
-              selectedIndex > 0 else {
-            return nil
-        }
-
-        for index in stride(from: selectedIndex - 1, through: 0, by: -1) {
-            guard let item = itemsByID[orderedIDs[index]] else { continue }
-            if case .state = item.node {
-                return item
-            }
-        }
-        return nil
-    }
-
-    var eventInspectorSelection: EventInspector.Selection {
+    var presentation: TraceViewerGraph.Presentation {
         .init(
-            item: selectedItem,
-            previousStateItem: selectedPreviousStateItem
+            nodes: visibleOverviewGraphNodes,
+            selectableNodeIDs: selectableVisibleOverviewGraphNodeIDs,
+            tooltipTextByNodeID: timelineData.itemsByID.mapValues(\.title),
+            selectedNodeID: selectedOverviewGraphNodeID,
+            maxLane: overviewGraphMaxLane,
+            timelineSelectionIDByNodeID: Dictionary(
+                uniqueKeysWithValues: visibleOverviewGraphNodes.compactMap { node in
+                    guard let selectionTimelineID = node.selectionTimelineID else { return nil }
+                    return (node.id, selectionTimelineID)
+                }
+            )
         )
     }
 
-    func isCollapsed(_ id: String) -> Bool {
-        collapsedIDs.contains(id)
+    mutating func updateInput(_ input: TraceViewerGraph.Input) {
+        self.input = input
     }
 
-    func isEventKindSelected(_ kind: TraceViewer.EventKind) -> Bool {
-        guard case .custom(let selection) = scopeFilter else { return false }
-        return selection.eventKinds.contains(kind)
+    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+        let previousInput = input
+        self = .init(traceCollection: traceCollection, input: previousInput)
     }
 
-    func isSelectableTimelineID(_ id: String) -> Bool {
-        guard visibleIDs.contains(id),
-              let item = itemsByID[id] else {
-            return false
+    mutating func selectNode(
+        id: String,
+        shouldFocusTimelineList: Bool
+    ) -> TraceViewerGraph.PublishedValue? {
+        guard selectableVisibleOverviewGraphNodeIDs.contains(id),
+              let timelineID = overviewGraphNodeByID[id]?.selectionTimelineID,
+              input.selectedTimelineID != timelineID else {
+            return nil
         }
-        return matchesScopeFilter(item)
+
+        input.selectedTimelineID = timelineID
+        return .init(
+            timelineID: timelineID,
+            shouldFocusTimelineList: shouldFocusTimelineList
+        )
     }
 
-    func isSelectableOverviewGraphNodeID(_ id: String) -> Bool {
-        guard let selectionTimelineID = overviewGraphNodeByID[id]?.selectionTimelineID else {
-            return false
-        }
-        return isSelectableTimelineID(selectionTimelineID)
-    }
-
-    func hasChildren(_ id: String) -> Bool {
-        !(childrenByParentID[id] ?? []).isEmpty
-    }
-
-    func collapsedDescendantCount(for id: String) -> Int {
-        guard collapsedIDs.contains(id) else { return 0 }
-        return descendantCountByID[id] ?? 0
-    }
-
-    func timelineSelectionID(forOverviewGraphNodeID id: String) -> String? {
-        overviewGraphNodeByID[id]?.selectionTimelineID
-    }
-
-    func descendants(of id: String) -> Set<String> {
-        var result: Set<String> = []
-        var stack: [String] = childrenByParentID[id] ?? []
-
-        while let next = stack.popLast() {
-            if result.insert(next).inserted {
-                stack.append(contentsOf: childrenByParentID[next] ?? [])
-            }
-        }
-        return result
-    }
-
-    func ancestors(of id: String) -> Set<String> {
-        var parentByChild: [String: String] = [:]
-        for (parent, children) in childrenByParentID {
-            for child in children where parentByChild[child] == nil {
-                parentByChild[child] = parent
-            }
-        }
-
-        var ancestors: Set<String> = []
-        var cursor = id
-        while let parent = parentByChild[cursor] {
-            if !ancestors.insert(parent).inserted { break }
-            cursor = parent
-        }
-        return ancestors
-    }
-
-    mutating func clampSelection(
-        anchorID: String? = nil,
-        prefersFirstSelectable: Bool = false
-    ) {
-        let visibleIDs = visibleIDs
-        let selectableVisibleIDs = selectableVisibleIDs
-        guard !selectableVisibleIDs.isEmpty else {
-            selectedID = nil
-            return
-        }
-
-        if let selectedID, selectableVisibleIDs.contains(selectedID) {
-            return
-        }
-
-        if prefersFirstSelectable {
-            selectedID = selectableVisibleIDs.first
-            return
-        }
-
-        let selectableVisibleIDSet = Set(selectableVisibleIDs)
-        let anchorID = anchorID ?? selectedID
-        if let anchorID,
-           let anchorIndex = visibleIDs.firstIndex(of: anchorID) {
-            for candidateIndex in anchorIndex..<visibleIDs.count {
-                let candidateID = visibleIDs[candidateIndex]
-                if selectableVisibleIDSet.contains(candidateID) {
-                    selectedID = candidateID
-                    return
-                }
-            }
-
-            if anchorIndex > 0 {
-                for candidateIndex in stride(from: anchorIndex - 1, through: 0, by: -1) {
-                    let candidateID = visibleIDs[candidateIndex]
-                    if selectableVisibleIDSet.contains(candidateID) {
-                        selectedID = candidateID
-                        return
-                    }
-                }
-            }
-        }
-
-        selectedID = selectableVisibleIDs.first
-    }
-
-    mutating func selectAllEventKinds() {
-        scopeFilter = .all
-        clampSelection(prefersFirstSelectable: true)
-    }
-
-    mutating func selectEvent(id: String) {
-        guard itemsByID[id] != nil else {
-            return
-        }
-        if !isSelectableTimelineID(id) {
-            scopeFilter = .all
-        }
-        selectedID = id
-    }
-
-    mutating func toggleEventKindFilter(_ kind: TraceViewer.EventKind) {
-        switch scopeFilter {
-        case .all:
-            scopeFilter = .custom(.init(eventKinds: [kind]))
-        case .custom(var selection):
-            if selection.eventKinds.contains(kind) {
-                selection.eventKinds.remove(kind)
-            }
-            else {
-                selection.eventKinds.insert(kind)
-            }
-            scopeFilter = .custom(selection)
-        }
-        clampSelection(prefersFirstSelectable: true)
-    }
-
-    mutating func toggleUserEventFilter() {
-        switch scopeFilter {
-        case .all:
-            scopeFilter = .custom(.init(includesUserEvents: true))
-        case .custom(var selection):
-            selection.includesUserEvents.toggle()
-            scopeFilter = .custom(selection)
-        }
-        clampSelection(prefersFirstSelectable: true)
-    }
-
-    mutating func selectVisible(offset: Int) {
-        let selectableVisibleIDs = selectableVisibleIDs
-        guard !selectableVisibleIDs.isEmpty else {
-            selectedID = nil
-            return
-        }
-
-        if selectedID == nil {
-            selectedID = selectableVisibleIDs.first
-            return
-        }
-
-        guard let selectedID,
-              let currentIndex = selectableVisibleIDs.firstIndex(of: selectedID) else {
-            self.selectedID = selectableVisibleIDs.first
-            return
-        }
-
-        let nextIndex = min(max(currentIndex + offset, 0), selectableVisibleIDs.count - 1)
-        self.selectedID = selectableVisibleIDs[nextIndex]
-    }
-
-    mutating func selectGraphNode(offset: Int) {
-        let visibleNodes = selectableVisibleOverviewGraphNodes
-        guard !visibleNodes.isEmpty else {
-            selectedID = nil
-            return
-        }
+    mutating func selectAdjacentNode(
+        offset: Int,
+        shouldFocusTimelineList: Bool
+    ) -> TraceViewerGraph.PublishedValue? {
+        let selectableNodeIDs = selectableVisibleOverviewGraphNodeIDs
+        guard !selectableNodeIDs.isEmpty else { return nil }
 
         let step = offset > 0 ? 1 : -1
         let startIndex: Int = {
-            guard let selectedOverviewGraphNodeID,
-                  let currentIndex = visibleNodes.firstIndex(where: { $0.id == selectedOverviewGraphNodeID }) else {
-                return step > 0 ? -1 : visibleNodes.count
+            guard let selectedNodeID = selectedOverviewGraphNodeID,
+                  let currentIndex = selectableNodeIDs.firstIndex(of: selectedNodeID) else {
+                return step > 0 ? -1 : selectableNodeIDs.count
             }
             return currentIndex
         }()
 
-        var index = startIndex
-        while true {
-            index += step
-            guard visibleNodes.indices.contains(index) else { return }
-            guard let selectionTimelineID = visibleNodes[index].selectionTimelineID else { continue }
-            selectedID = selectionTimelineID
-            return
-        }
+        let nextIndex = startIndex + step
+        guard selectableNodeIDs.indices.contains(nextIndex) else { return nil }
+        let nextNodeID = selectableNodeIDs[nextIndex]
+        return selectNode(
+            id: nextNodeID,
+            shouldFocusTimelineList: shouldFocusTimelineList
+        )
     }
+}
 
-    mutating func selectFirstVisible() {
-        selectedID = selectableVisibleIDs.first
-    }
-
-    mutating func selectLastVisible() {
-        selectedID = selectableVisibleIDs.last
-    }
-
-    mutating func focusOnSelection() {
-        guard let selectedID else { return }
-        let protected = ancestors(of: selectedID)
-            .union(descendants(of: selectedID))
-            .union([selectedID])
-
-        for id in orderedIDs where hasChildren(id) && !protected.contains(id) {
-            collapsedIDs.insert(id)
-        }
-        clampSelection()
-    }
-
-    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
-        let previousSelectedID = selectedID
-        let previousCollapsedIDs = collapsedIDs
-        let previousScopeFilter = scopeFilter
-
-        self = .init(traceCollection: traceCollection)
-        scopeFilter = previousScopeFilter
-        collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
-        if let previousSelectedID,
-           itemsByID[previousSelectedID] != nil {
-            selectedID = previousSelectedID
-        }
-        clampSelection(anchorID: previousSelectedID)
-    }
-
-    static func makeItem(
-        node: SessionGraph.Node,
-        initialStateID: String?,
-        childrenByParentID: [String: [String]],
-        actionByID: [String: SessionGraph.ActionNode],
-        visibleAppliedMutationActionIDs: Set<String>,
-        visibleAppliedEffectActionIDs: Set<String>,
-        hiddenAppliedMutationByActionID: [String: SessionGraph.MutationNode],
-        hiddenAppliedEffectByActionID: [String: SessionGraph.EffectNode]
-    ) -> TraceViewer.TimelineItem? {
-        switch node {
-        case .state(let state):
-            let isInitialState = (state.id.rawValue == initialStateID)
-            return .init(
-                id: state.id.rawValue,
-                order: state.order,
-                kind: .state,
-                colorKind: .state,
-                title: isInitialState ? "Initial State" : "State Change",
-                subtitle: isInitialState ? "initial state snapshot" : "state snapshot",
-                date: state.capturedAt,
-                childIDs: childrenByParentID[state.id.rawValue] ?? [],
-                node: node
-            )
-
-        case .action(let action):
-            let collapsedAppliedMutation = hiddenAppliedMutationByActionID[action.id.rawValue]
-            let title: String = {
-                switch action.kind {
-                case .effect:
-                    return action.actionCase
-                case .publish:
-                    return "Publish"
-                case .cancel:
-                    return "Cancel"
-                case .mutating:
-                    return action.actionCase
-                case .none:
-                    return action.actionCase
-                }
-            }()
-            let subtitle: String = {
-                let source = Self.actionOriginLabel(action.source)
-                let exactCase = Self.exactCaseLabel(from: action.action) ?? action.action
-                return "\(source) • \(exactCase)"
-            }()
-            let eventKind: TraceViewer.EventKind
-            let eventColorKind: TraceViewer.EventColorKind
-            switch action.kind {
-            case .mutating:
-                eventKind = .mutation
-                eventColorKind = .mutation
-            case .effect:
-                eventKind = .effect
-                eventColorKind = .effect
-            case .publish:
-                eventKind = .flow
-                eventColorKind = .publish
-            case .cancel:
-                eventKind = .flow
-                eventColorKind = .cancel
-            case .none:
-                assertionFailure("Unexpected traced .none action node: \(action.id.rawValue)")
-                return nil
-            }
-
-            return .init(
-                id: action.id.rawValue,
-                order: action.order,
-                kind: eventKind,
-                colorKind: eventColorKind,
-                title: title,
-                subtitle: subtitle,
-                date: collapsedAppliedMutation?.appliedAt ?? action.receivedAt,
-                childIDs: childrenByParentID[action.id.rawValue] ?? [],
-                node: node
-            )
-
-        case .mutation(let mutation):
-            let actionName = actionByID[mutation.actionID.rawValue]?.actionCase
-            return .init(
-                id: mutation.id.rawValue,
-                order: mutation.order,
-                kind: .mutation,
-                colorKind: .mutation,
-                title: actionName.map { "Apply \($0)" } ?? "Apply Mutation",
-                subtitle: actionName.map { _ in "applied mutation • action=\(mutation.actionID)" } ?? "applied mutation • action=\(mutation.actionID)",
-                date: mutation.appliedAt,
-                childIDs: childrenByParentID[mutation.id.rawValue] ?? [],
-                node: node
-            )
-
-        case .effect(let effect):
-            let effectName = effect.startedByActionID.flatMap { actionByID[$0.rawValue]?.actionCase }
-            let subtitle: String = {
-                let details = EventInspectorFormatter.effectSubtitle(effect)
-                if effect.kind == .action {
-                    return "applied effect • single action"
-                }
-                if effectName != nil {
-                    return "applied effect • \(details)"
-                }
-                return "applied effect • \(details)"
-            }()
-            return .init(
-                id: effect.id.rawValue,
-                order: effect.order,
-                kind: .effect,
-                colorKind: .effect,
-                title: effectName ?? effect.kind.rawValue,
-                subtitle: subtitle,
-                date: nil,
-                childIDs: childrenByParentID[effect.id.rawValue] ?? [],
-                node: node
-            )
-
-        case .batch(let batch):
-            return .init(
-                id: batch.id.rawValue,
-                order: batch.order,
-                kind: .batch,
-                colorKind: .batch,
-                title: "Batch \(batch.kind.rawValue)",
-                subtitle: "actions=\(batch.actionCount)",
-                date: nil,
-                childIDs: childrenByParentID[batch.id.rawValue] ?? [],
-                node: node
-            )
-        }
-    }
-
-    private static func appliedEffectLabel(_ effect: SessionGraph.EffectNode) -> String {
-        ".\(effect.kind.rawValue)"
-    }
-
-    private static func exactCaseLabel(from code: String?) -> String? {
-        guard let code, !code.isEmpty, code != "nil" else { return nil }
-        guard code.first == "." else {
-            return code
-        }
-
-        var label = "."
-        for character in code.dropFirst() {
-            guard character.isLetter || character.isNumber || character == "_" else {
-                break
-            }
-            label.append(character)
-        }
-        return label.count > 1 ? label : nil
-    }
-
-    private static func actionOriginLabel(_ source: SessionGraph.ActionNode.Source) -> String {
-        switch source {
-        case .user:
-            return "USER"
-        case .action, .effect, .system:
-            return "CODE"
-        }
-    }
-
+extension TraceViewerGraph {
     static func makeParentByChildID(
         from edges: [SessionGraph.Edge]
     ) -> [String: String] {
@@ -762,7 +172,7 @@ extension TraceViewer.StoreState {
         orderedIDs: [String],
         itemsByID: [String: TraceViewer.TimelineItem],
         parentByChildID: [String: String]
-    ) -> CommitGraphLayout {
+    ) -> TraceViewerGraph.StoreState.CommitGraphLayout {
         var actionProducerByNodeID: [String: String] = [:]
         var effectEmitterByNodeID: [String: String] = [:]
         var startedEffectsByActionID: [String: [SessionGraph.StartedEffectEdge]] = [:]
@@ -864,6 +274,7 @@ extension TraceViewer.StoreState {
             switch item.node {
             case .state:
                 effectID = nil
+
             case .effect(let effect):
                 effectID = effect.id.rawValue
 
@@ -1061,6 +472,7 @@ extension TraceViewer.StoreState {
                 if let resultActionID = resultActionByStateID[state.id.rawValue] {
                     predecessorIDs.append(resultActionID)
                 }
+
             case .action(let action):
                 var hasExplicitCausalSource = false
                 switch action.source {
@@ -1268,7 +680,7 @@ extension TraceViewer.StoreState {
 
             let lineKindByPredecessor: [String: TraceViewer.EdgeLineKind] = Dictionary(
                 uniqueKeysWithValues: predecessorIDs.map { predecessorID in
-                    return (predecessorID, edgeLineKind(to: id))
+                    (predecessorID, edgeLineKind(to: id))
                 }
             )
             edgeLineKindByPredecessorID[id] = lineKindByPredecessor
@@ -1291,7 +703,7 @@ extension TraceViewer.StoreState {
         edgeLineKindByPredecessorID: [String: [String: TraceViewer.EdgeLineKind]],
         sharedColumnAnchorByID: [String: String],
         maxTimelineLane: Int
-    ) -> OverviewGraphPresentation {
+    ) -> TraceViewerGraph.StoreState.OverviewGraphPresentation {
         var graphLaneByTimelineID = laneByTimelineID.mapValues { max($0, 1) }
         for timelineID in orderedTimelineIDs {
             guard let item = itemsByID[timelineID] else { continue }
@@ -1304,9 +716,9 @@ extension TraceViewer.StoreState {
         }
 
         let knownGraphNodeIDs = Set(orderedTimelineIDs)
-        var nodes: [OverviewGraphNode] = []
+        var nodes: [TraceViewerGraph.OverviewGraphNode] = []
         nodes.reserveCapacity(orderedTimelineIDs.count)
-        var nodeByID: [OverviewGraphNode.ID: OverviewGraphNode] = [:]
+        var nodeByID: [String: TraceViewerGraph.OverviewGraphNode] = [:]
         var graphIDByTimelineID: [String: String] = [:]
         var columnByTimelineID: [String: Int] = [:]
         var maxLane = max(maxTimelineLane, 0)
@@ -1314,7 +726,7 @@ extension TraceViewer.StoreState {
 
         for timelineID in orderedTimelineIDs {
             guard let item = itemsByID[timelineID] else { continue }
-            let kind: OverviewGraphNode.Kind = {
+            let kind: TraceViewerGraph.OverviewGraphNode.Kind = {
                 switch item.kind {
                 case .state:
                     return .state
@@ -1345,7 +757,7 @@ extension TraceViewer.StoreState {
             }()
             maxLane = max(maxLane, lane)
 
-            let node = OverviewGraphNode(
+            let node = TraceViewerGraph.OverviewGraphNode(
                 id: timelineID,
                 kind: kind,
                 colorKind: item.colorKind,
@@ -1369,19 +781,5 @@ extension TraceViewer.StoreState {
             graphIDByTimelineID: graphIDByTimelineID,
             maxLane: max(maxLane, 0)
         )
-    }
-
-    static func shouldShowAppliedNode(
-        scheduledNodeID: String,
-        appliedNodeID: String,
-        indexByNodeID: [String: Int]
-    ) -> Bool {
-        guard let scheduledIndex = indexByNodeID[scheduledNodeID],
-              let appliedIndex = indexByNodeID[appliedNodeID],
-              scheduledIndex < appliedIndex else {
-            return true
-        }
-        // Keep both only if something else happened between scheduled and applied.
-        return (appliedIndex - scheduledIndex) > 1
     }
 }
