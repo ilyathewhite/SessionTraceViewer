@@ -41,33 +41,34 @@ extension TraceViewerGraph.StoreState {
             sharedColumnAnchorByID: commitGraphLayout.sharedColumnAnchorByID,
             maxTimelineLane: commitGraphLayout.maxLane
         )
-
-        self.init(
-            timelineData: timelineData,
+        let tooltipTextByNodeID = timelineData.itemsByID.mapValues(\.title)
+        let presentation = TraceViewerGraph.buildPresentation(
             overviewGraphNodes: overviewGraphPresentation.nodes,
-            overviewGraphNodeByID: overviewGraphPresentation.nodeByID,
             overviewGraphIDByTimelineID: overviewGraphPresentation.graphIDByTimelineID,
             overviewGraphMaxLane: overviewGraphPresentation.maxLane,
+            tooltipTextByNodeID: tooltipTextByNodeID,
             input: input
         )
+
+        self.timelineData = timelineData
+        self.overviewGraphNodes = overviewGraphPresentation.nodes
+        self.overviewGraphNodeByID = overviewGraphPresentation.nodeByID
+        self.overviewGraphIDByTimelineID = overviewGraphPresentation.graphIDByTimelineID
+        self.overviewGraphMaxLane = overviewGraphPresentation.maxLane
+        self.overviewGraphTooltipTextByID = tooltipTextByNodeID
+        self.input = input
+        self.presentation = presentation
     }
 
     var visibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
-        let visibleTimelineIDSet = Set(input.visibleTimelineIDs)
-        return overviewGraphNodes.filter { node in
-            guard let timelineID = node.timelineID else {
-                return true
-            }
-            return visibleTimelineIDSet.contains(timelineID)
-        }
+        visibleOverviewGraphNodes(for: input.visibleTimelineIDs)
     }
 
     var selectableVisibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
-        let selectableVisibleIDSet = Set(input.selectableTimelineIDs)
-        return visibleOverviewGraphNodes.filter { node in
-            guard let selectionTimelineID = node.selectionTimelineID else { return false }
-            return selectableVisibleIDSet.contains(selectionTimelineID)
-        }
+        selectableVisibleOverviewGraphNodes(
+            from: visibleOverviewGraphNodes,
+            selectableTimelineIDs: input.selectableTimelineIDs
+        )
     }
 
     var selectableVisibleOverviewGraphNodeIDs: [String] {
@@ -75,28 +76,29 @@ extension TraceViewerGraph.StoreState {
     }
 
     var selectedOverviewGraphNodeID: String? {
-        guard let selectedTimelineID = input.selectedTimelineID else { return nil }
-        return overviewGraphIDByTimelineID[selectedTimelineID]
-    }
-
-    var presentation: TraceViewerGraph.Presentation {
-        .init(
-            nodes: visibleOverviewGraphNodes,
-            selectableNodeIDs: selectableVisibleOverviewGraphNodeIDs,
-            tooltipTextByNodeID: timelineData.itemsByID.mapValues(\.title),
-            selectedNodeID: selectedOverviewGraphNodeID,
-            maxLane: overviewGraphMaxLane,
-            timelineSelectionIDByNodeID: Dictionary(
-                uniqueKeysWithValues: visibleOverviewGraphNodes.compactMap { node in
-                    guard let selectionTimelineID = node.selectionTimelineID else { return nil }
-                    return (node.id, selectionTimelineID)
-                }
-            )
-        )
+        selectedOverviewGraphNodeID(for: input.selectedTimelineID)
     }
 
     mutating func updateInput(_ input: TraceViewerGraph.Input) {
+        let previousInput = self.input
         self.input = input
+
+        if previousInput.visibleTimelineIDs != input.visibleTimelineIDs {
+            presentation = makePresentation(for: input)
+            return
+        }
+
+        if previousInput.selectableTimelineIDs != input.selectableTimelineIDs {
+            let visibleNodes = visibleOverviewGraphNodes(for: input.visibleTimelineIDs)
+            presentation.selectableNodeIDs = selectableVisibleOverviewGraphNodeIDs(
+                from: visibleNodes,
+                selectableTimelineIDs: input.selectableTimelineIDs
+            )
+        }
+
+        if previousInput.selectedTimelineID != input.selectedTimelineID {
+            presentation.selectedNodeID = selectedOverviewGraphNodeID(for: input.selectedTimelineID)
+        }
     }
 
     mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
@@ -108,13 +110,14 @@ extension TraceViewerGraph.StoreState {
         id: String,
         shouldFocusTimelineList: Bool
     ) -> TraceViewerGraph.PublishedValue? {
-        guard selectableVisibleOverviewGraphNodeIDs.contains(id),
-              let timelineID = overviewGraphNodeByID[id]?.selectionTimelineID,
+        guard presentation.selectableNodeIDs.contains(id),
+              let timelineID = presentation.timelineSelectionIDByNodeID[id],
               input.selectedTimelineID != timelineID else {
             return nil
         }
 
         input.selectedTimelineID = timelineID
+        presentation.selectedNodeID = selectedOverviewGraphNodeID(for: timelineID)
         return .init(
             timelineID: timelineID,
             shouldFocusTimelineList: shouldFocusTimelineList
@@ -125,12 +128,12 @@ extension TraceViewerGraph.StoreState {
         offset: Int,
         shouldFocusTimelineList: Bool
     ) -> TraceViewerGraph.PublishedValue? {
-        let selectableNodeIDs = selectableVisibleOverviewGraphNodeIDs
+        let selectableNodeIDs = presentation.selectableNodeIDs
         guard !selectableNodeIDs.isEmpty else { return nil }
 
         let step = offset > 0 ? 1 : -1
         let startIndex: Int = {
-            guard let selectedNodeID = selectedOverviewGraphNodeID,
+            guard let selectedNodeID = presentation.selectedNodeID,
                   let currentIndex = selectableNodeIDs.firstIndex(of: selectedNodeID) else {
                 return step > 0 ? -1 : selectableNodeIDs.count
             }
@@ -144,6 +147,55 @@ extension TraceViewerGraph.StoreState {
             id: nextNodeID,
             shouldFocusTimelineList: shouldFocusTimelineList
         )
+    }
+
+    private func makePresentation(for input: TraceViewerGraph.Input) -> TraceViewerGraph.Presentation {
+        TraceViewerGraph.buildPresentation(
+            overviewGraphNodes: overviewGraphNodes,
+            overviewGraphIDByTimelineID: overviewGraphIDByTimelineID,
+            overviewGraphMaxLane: overviewGraphMaxLane,
+            tooltipTextByNodeID: overviewGraphTooltipTextByID,
+            input: input
+        )
+    }
+
+    private func visibleOverviewGraphNodes(
+        for visibleTimelineIDs: [String]
+    ) -> [TraceViewerGraph.OverviewGraphNode] {
+        let visibleTimelineIDSet = Set(visibleTimelineIDs)
+        return overviewGraphNodes.filter { node in
+            guard let timelineID = node.timelineID else {
+                return true
+            }
+            return visibleTimelineIDSet.contains(timelineID)
+        }
+    }
+
+    private func selectableVisibleOverviewGraphNodes(
+        from visibleNodes: [TraceViewerGraph.OverviewGraphNode],
+        selectableTimelineIDs: [String]
+    ) -> [TraceViewerGraph.OverviewGraphNode] {
+        let selectableVisibleIDSet = Set(selectableTimelineIDs)
+        return visibleNodes.filter { node in
+            guard let selectionTimelineID = node.selectionTimelineID else { return false }
+            return selectableVisibleIDSet.contains(selectionTimelineID)
+        }
+    }
+
+    private func selectableVisibleOverviewGraphNodeIDs(
+        from visibleNodes: [TraceViewerGraph.OverviewGraphNode],
+        selectableTimelineIDs: [String]
+    ) -> [String] {
+        selectableVisibleOverviewGraphNodes(
+            from: visibleNodes,
+            selectableTimelineIDs: selectableTimelineIDs
+        )
+        .map(\.id)
+    }
+
+    private func selectedOverviewGraphNodeID(for selectedTimelineID: String?) -> String? {
+        guard let selectedTimelineID else { return nil }
+        return overviewGraphIDByTimelineID[selectedTimelineID]
     }
 }
 
@@ -781,5 +833,329 @@ extension TraceViewerGraph {
             graphIDByTimelineID: graphIDByTimelineID,
             maxLane: max(maxLane, 0)
         )
+    }
+
+    static func buildPresentation(
+        overviewGraphNodes: [TraceViewerGraph.OverviewGraphNode],
+        overviewGraphIDByTimelineID: [String: String],
+        overviewGraphMaxLane: Int,
+        tooltipTextByNodeID: [String: String],
+        input: TraceViewerGraph.Input
+    ) -> TraceViewerGraph.Presentation {
+        let visibleTimelineIDSet = Set(input.visibleTimelineIDs)
+        let visibleNodes = overviewGraphNodes.filter { node in
+            guard let timelineID = node.timelineID else {
+                return true
+            }
+            return visibleTimelineIDSet.contains(timelineID)
+        }
+        let selectableTimelineIDSet = Set(input.selectableTimelineIDs)
+        let visibleMaxLane = visibleNodes.map(\.lane).max() ?? overviewGraphMaxLane
+
+        return .init(
+            columns: buildOverviewColumns(nodes: visibleNodes),
+            nodeByID: Dictionary(uniqueKeysWithValues: visibleNodes.map { ($0.id, $0) }),
+            selectableNodeIDs: visibleNodes.compactMap { node in
+                guard let selectionTimelineID = node.selectionTimelineID,
+                      selectableTimelineIDSet.contains(selectionTimelineID) else {
+                    return nil
+                }
+                return node.id
+            },
+            tooltipTextByNodeID: tooltipTextByNodeID,
+            selectedNodeID: input.selectedTimelineID.flatMap { overviewGraphIDByTimelineID[$0] },
+            visibleMaxLane: visibleMaxLane,
+            maxLane: overviewGraphMaxLane,
+            timelineSelectionIDByNodeID: Dictionary(
+                uniqueKeysWithValues: visibleNodes.compactMap { node in
+                    guard let selectionTimelineID = node.selectionTimelineID else { return nil }
+                    return (node.id, selectionTimelineID)
+                }
+            )
+        )
+    }
+
+    static func buildOverviewColumns(
+        nodes: [TraceViewerGraph.OverviewGraphNode]
+    ) -> [TraceViewerGraph.OverviewColumn] {
+        let maxColumn = nodes.map(\.column).max() ?? 0
+        let nodesByColumn = Dictionary(grouping: nodes, by: \.column)
+        let nodeByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        let nodeIndexByID = Dictionary(uniqueKeysWithValues: nodes.enumerated().map { ($1.id, $0) })
+        let edgePiecesByColumn = buildOverviewEdgePieces(
+            nodes: nodes,
+            nodesByColumn: nodesByColumn,
+            nodeByID: nodeByID,
+            nodeIndexByID: nodeIndexByID
+        )
+
+        return (0...maxColumn).map { column in
+            .init(
+                id: column,
+                nodes: (nodesByColumn[column] ?? [])
+                    .sorted { lhs, rhs in
+                        if lhs.lane == rhs.lane {
+                            return lhs.id < rhs.id
+                        }
+                        return lhs.lane > rhs.lane
+                    },
+                edgePieces: edgePiecesByColumn[column] ?? []
+            )
+        }
+    }
+
+    private static func buildOverviewEdgePieces(
+        nodes: [TraceViewerGraph.OverviewGraphNode],
+        nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]],
+        nodeByID: [String: TraceViewerGraph.OverviewGraphNode],
+        nodeIndexByID: [String: Int]
+    ) -> [Int: [TraceViewerGraph.OverviewEdgePiece]] {
+        var edgePiecesByColumn: [Int: [TraceViewerGraph.OverviewEdgePiece]] = [:]
+
+        for node in nodes {
+            guard let nodeIndex = nodeIndexByID[node.id] else { continue }
+
+            for predecessorID in node.predecessorIDs {
+                guard let predecessor = nodeByID[predecessorID],
+                      let predecessorIndex = nodeIndexByID[predecessorID],
+                      predecessorIndex < nodeIndex else {
+                    continue
+                }
+
+                appendOverviewEdgePieces(
+                    from: predecessor,
+                    to: node,
+                    lineKind: node.edgeLineKindByPredecessorID[predecessorID] ?? .solid,
+                    nodesByColumn: nodesByColumn,
+                    edgePiecesByColumn: &edgePiecesByColumn
+                )
+            }
+        }
+
+        return edgePiecesByColumn
+    }
+
+    private static func appendOverviewEdgePieces(
+        from predecessor: TraceViewerGraph.OverviewGraphNode,
+        to node: TraceViewerGraph.OverviewGraphNode,
+        lineKind: TraceViewer.EdgeLineKind,
+        nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]],
+        edgePiecesByColumn: inout [Int: [TraceViewerGraph.OverviewEdgePiece]]
+    ) {
+        let edgeID = "\(predecessor.id)->\(node.id)"
+        let columnCenterX = TraceViewerGraph.OverviewMetrics.columnWidth / 2
+
+        if predecessor.column == node.column {
+            edgePiecesByColumn[node.column, default: []].append(
+                .init(
+                    id: "\(edgeID):local",
+                    predecessorID: predecessor.id,
+                    nodeID: node.id,
+                    lineKind: lineKind,
+                    segment: .localCurve(startLane: predecessor.lane, endLane: node.lane)
+                )
+            )
+            return
+        }
+
+        if predecessor.lane == node.lane {
+            appendOverviewHorizontalSegments(
+                edgeID: edgeID,
+                predecessorID: predecessor.id,
+                nodeID: node.id,
+                column: predecessor.column,
+                lane: predecessor.lane,
+                baseRange: columnCenterX...TraceViewerGraph.OverviewMetrics.columnWidth,
+                excludingNodeIDs: [predecessor.id],
+                lineKind: lineKind,
+                nodesByColumn: nodesByColumn,
+                edgePiecesByColumn: &edgePiecesByColumn
+            )
+
+            if predecessor.column + 1 < node.column {
+                for column in (predecessor.column + 1)..<node.column {
+                    appendOverviewHorizontalSegments(
+                        edgeID: edgeID,
+                        predecessorID: predecessor.id,
+                        nodeID: node.id,
+                        column: column,
+                        lane: node.lane,
+                        baseRange: 0...TraceViewerGraph.OverviewMetrics.columnWidth,
+                        excludingNodeIDs: [],
+                        lineKind: lineKind,
+                        nodesByColumn: nodesByColumn,
+                        edgePiecesByColumn: &edgePiecesByColumn
+                    )
+                }
+            }
+
+            appendOverviewHorizontalSegments(
+                edgeID: edgeID,
+                predecessorID: predecessor.id,
+                nodeID: node.id,
+                column: node.column,
+                lane: node.lane,
+                baseRange: 0...columnCenterX,
+                excludingNodeIDs: [node.id],
+                lineKind: lineKind,
+                nodesByColumn: nodesByColumn,
+                edgePiecesByColumn: &edgePiecesByColumn
+            )
+            return
+        }
+
+        if predecessor.lane < node.lane {
+            edgePiecesByColumn[predecessor.column, default: []].append(
+                .init(
+                    id: "\(edgeID):source-curve",
+                    predecessorID: predecessor.id,
+                    nodeID: node.id,
+                    lineKind: lineKind,
+                    segment: .sourceCurve(startLane: predecessor.lane, endLane: node.lane)
+                )
+            )
+
+            if predecessor.column + 1 < node.column {
+                for column in (predecessor.column + 1)..<node.column {
+                    appendOverviewHorizontalSegments(
+                        edgeID: edgeID,
+                        predecessorID: predecessor.id,
+                        nodeID: node.id,
+                        column: column,
+                        lane: node.lane,
+                        baseRange: 0...TraceViewerGraph.OverviewMetrics.columnWidth,
+                        excludingNodeIDs: [],
+                        lineKind: lineKind,
+                        nodesByColumn: nodesByColumn,
+                        edgePiecesByColumn: &edgePiecesByColumn
+                    )
+                }
+            }
+
+            appendOverviewHorizontalSegments(
+                edgeID: edgeID,
+                predecessorID: predecessor.id,
+                nodeID: node.id,
+                column: node.column,
+                lane: node.lane,
+                baseRange: 0...columnCenterX,
+                excludingNodeIDs: [node.id],
+                lineKind: lineKind,
+                nodesByColumn: nodesByColumn,
+                edgePiecesByColumn: &edgePiecesByColumn
+            )
+            return
+        }
+
+        appendOverviewHorizontalSegments(
+            edgeID: edgeID,
+            predecessorID: predecessor.id,
+            nodeID: node.id,
+            column: predecessor.column,
+            lane: predecessor.lane,
+            baseRange: columnCenterX...TraceViewerGraph.OverviewMetrics.columnWidth,
+            excludingNodeIDs: [predecessor.id],
+            lineKind: lineKind,
+            nodesByColumn: nodesByColumn,
+            edgePiecesByColumn: &edgePiecesByColumn
+        )
+
+        if predecessor.column + 1 < node.column {
+            for column in (predecessor.column + 1)..<node.column {
+                appendOverviewHorizontalSegments(
+                    edgeID: edgeID,
+                    predecessorID: predecessor.id,
+                    nodeID: node.id,
+                    column: column,
+                    lane: predecessor.lane,
+                    baseRange: 0...TraceViewerGraph.OverviewMetrics.columnWidth,
+                    excludingNodeIDs: [],
+                    lineKind: lineKind,
+                    nodesByColumn: nodesByColumn,
+                    edgePiecesByColumn: &edgePiecesByColumn
+                )
+            }
+        }
+
+        edgePiecesByColumn[node.column, default: []].append(
+            .init(
+                id: "\(edgeID):target-curve",
+                predecessorID: predecessor.id,
+                nodeID: node.id,
+                lineKind: lineKind,
+                segment: .targetCurve(startLane: predecessor.lane, endLane: node.lane)
+            )
+        )
+    }
+
+    private static func appendOverviewHorizontalSegments(
+        edgeID: String,
+        predecessorID: String,
+        nodeID: String,
+        column: Int,
+        lane: Int,
+        baseRange: ClosedRange<CGFloat>,
+        excludingNodeIDs: Set<String>,
+        lineKind: TraceViewer.EdgeLineKind,
+        nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]],
+        edgePiecesByColumn: inout [Int: [TraceViewerGraph.OverviewEdgePiece]]
+    ) {
+        let hasBlocker = (nodesByColumn[column] ?? []).contains { overviewNode in
+            overviewNode.lane == lane && !excludingNodeIDs.contains(overviewNode.id)
+        }
+
+        let segments = overviewHorizontalSegments(in: baseRange, hasBlocker: hasBlocker)
+        for (index, segment) in segments.enumerated() {
+            edgePiecesByColumn[column, default: []].append(
+                .init(
+                    id: "\(edgeID):horizontal:\(column):\(index)",
+                    predecessorID: predecessorID,
+                    nodeID: nodeID,
+                    lineKind: lineKind,
+                    segment: .horizontal(
+                        lane: lane,
+                        startX: segment.lowerBound,
+                        endX: segment.upperBound
+                    )
+                )
+            )
+        }
+    }
+
+    private static func overviewHorizontalSegments(
+        in baseRange: ClosedRange<CGFloat>,
+        hasBlocker: Bool
+    ) -> [ClosedRange<CGFloat>] {
+        guard hasBlocker else {
+            return [baseRange]
+        }
+
+        let columnCenterX = TraceViewerGraph.OverviewMetrics.columnWidth / 2
+        let blockerLower = max(columnCenterX - TraceViewerGraph.OverviewMetrics.blockerClearance, 0)
+        let blockerUpper = min(
+            columnCenterX + TraceViewerGraph.OverviewMetrics.blockerClearance,
+            TraceViewerGraph.OverviewMetrics.columnWidth
+        )
+        let blockerRange = blockerLower...blockerUpper
+        return splitOverviewSegment(segment: baseRange, removing: blockerRange)
+            .filter { $0.upperBound - $0.lowerBound > 0.5 }
+    }
+
+    private static func splitOverviewSegment(
+        segment: ClosedRange<CGFloat>,
+        removing blockerRange: ClosedRange<CGFloat>
+    ) -> [ClosedRange<CGFloat>] {
+        if blockerRange.upperBound <= segment.lowerBound || blockerRange.lowerBound >= segment.upperBound {
+            return [segment]
+        }
+
+        var result: [ClosedRange<CGFloat>] = []
+        if blockerRange.lowerBound > segment.lowerBound {
+            result.append(segment.lowerBound...min(blockerRange.lowerBound, segment.upperBound))
+        }
+        if blockerRange.upperBound < segment.upperBound {
+            result.append(max(blockerRange.upperBound, segment.lowerBound)...segment.upperBound)
+        }
+        return result
     }
 }

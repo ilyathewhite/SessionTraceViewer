@@ -215,6 +215,28 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
+    func testGraphSelectionUpdatePreservesCachedColumns() throws {
+        let state = try makeStateFromGeneratedTrace()
+        var graphState = state.graphState
+        let initialColumns = graphState.presentation.columns
+        let initialNodeByID = graphState.presentation.nodeByID
+        guard graphState.presentation.selectableNodeIDs.count > 1 else {
+            XCTFail("Trace did not contain enough selectable graph nodes for cached column coverage.")
+            return
+        }
+
+        let targetNodeID = graphState.presentation.selectableNodeIDs[1]
+        _ = TraceViewerGraph.reduce(
+            &graphState,
+            .selectNode(id: targetNodeID, shouldFocusTimelineList: false)
+        )
+
+        XCTAssertEqual(graphState.presentation.columns, initialColumns)
+        XCTAssertEqual(graphState.presentation.nodeByID, initialNodeByID)
+        XCTAssertEqual(graphState.presentation.selectedNodeID, targetNodeID)
+    }
+
+    @Test
     func testSelectPreviousGraphNodeMovesBackToPreviousVisibleGraphNode() throws {
         var state = try makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)

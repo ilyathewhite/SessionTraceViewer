@@ -7,17 +7,17 @@ extension TraceViewerGraph {
     struct TimelineOverviewView: View {
         fileprivate struct Layout: Equatable {
             let laneCount: Int
-            let columnWidth: CGFloat = 48
-            let laneSpacing: CGFloat = 34
-            let verticalInset: CGFloat = 24
-            let nodeRadius: CGFloat = 5
-            let nodeHitArea: CGFloat = 30
+            let columnWidth = TraceViewerGraph.OverviewMetrics.columnWidth
+            let laneSpacing = TraceViewerGraph.OverviewMetrics.laneSpacing
+            let verticalInset = TraceViewerGraph.OverviewMetrics.verticalInset
+            let nodeRadius = TraceViewerGraph.OverviewMetrics.nodeRadius
+            let nodeHitArea = TraceViewerGraph.OverviewMetrics.nodeHitArea
             let tooltipHeight: CGFloat = TraceViewerGraph.TimelineOverviewTooltip.height
-            let tooltipVerticalOffset: CGFloat = 22
-            let tooltipMaxWidth: CGFloat = 240
-            let selectionRingGap: CGFloat = 2
-            let selectionRingThickness: CGFloat = 2
-            let mutedOpacity: Double = 0.26
+            let tooltipVerticalOffset = TraceViewerGraph.OverviewMetrics.tooltipVerticalOffset
+            let tooltipMaxWidth = TraceViewerGraph.OverviewMetrics.tooltipMaxWidth
+            let selectionRingGap = TraceViewerGraph.OverviewMetrics.selectionRingGap
+            let selectionRingThickness = TraceViewerGraph.OverviewMetrics.selectionRingThickness
+            let mutedOpacity = TraceViewerGraph.OverviewMetrics.mutedOpacity
 
             var columnCenterX: CGFloat {
                 columnWidth / 2
@@ -35,10 +35,6 @@ extension TraceViewerGraph {
                 graphTopInset + graphBottomInset + CGFloat(max(laneCount - 1, 0)) * laneSpacing
             }
 
-            var blockerClearance: CGFloat {
-                nodeRadius + 3.2
-            }
-
             var selectionRingInnerRadius: CGFloat {
                 nodeRadius + selectionRingGap
             }
@@ -52,92 +48,37 @@ extension TraceViewerGraph {
             }
         }
 
-        fileprivate struct EdgePiece: Identifiable {
-            enum Segment {
-                case horizontal(lane: Int, startX: CGFloat, endX: CGFloat)
-                case sourceCurve(startLane: Int, endLane: Int)
-                case targetCurve(startLane: Int, endLane: Int)
-                case localCurve(startLane: Int, endLane: Int)
-            }
-
-            let id: String
-            let color: Color
-            let lineKind: TraceViewer.EdgeLineKind
-            let segment: Segment
-        }
-
-        fileprivate struct Column: Identifiable {
-            let id: Int
-            let nodes: [TraceViewerGraph.OverviewGraphNode]
-            let edgePieces: [EdgePiece]
-        }
-
         fileprivate struct HoveredTooltip {
             let text: String
             let nodePoint: CGPoint
             let width: CGFloat
         }
 
-        let nodes: [TraceViewerGraph.OverviewGraphNode]
-        let selectableNodeIDs: [String]
-        let tooltipTextByNodeID: [String: String]
-        let selectedNodeID: String?
-        let maxLane: Int
+        let presentation: TraceViewerGraph.Presentation
         let onSelectNode: (String) -> Void
         @State private var hoveredNodeID: String?
 
         private var layout: Layout {
-            let visibleMaxLane = nodes.map(\.lane).max() ?? maxLane
-            return .init(laneCount: max(visibleMaxLane + 1, 1))
-        }
-
-        private var maxColumn: Int {
-            nodes.map(\.column).max() ?? 0
+            .init(laneCount: max(presentation.visibleMaxLane + 1, 1))
         }
 
         private var graphWidth: CGFloat {
-            CGFloat(maxColumn + 1) * layout.columnWidth
-        }
-
-        private var nodeByID: [String: TraceViewerGraph.OverviewGraphNode] {
-            Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
-        }
-
-        private var nodeIndexByID: [String: Int] {
-            Dictionary(uniqueKeysWithValues: nodes.enumerated().map { ($1.id, $0) })
+            CGFloat(max(presentation.columns.count, 1)) * layout.columnWidth
         }
 
         private var selectableNodeIDSet: Set<String> {
-            Set(selectableNodeIDs)
-        }
-
-        private var columns: [Column] {
-            let nodesByColumn = Dictionary(grouping: nodes, by: \.column)
-            let edgePiecesByColumn = buildEdgePieces(nodesByColumn: nodesByColumn)
-            return (0...maxColumn).map { column in
-                Column(
-                    id: column,
-                    nodes: (nodesByColumn[column] ?? [])
-                        .sorted { lhs, rhs in
-                            if lhs.lane == rhs.lane {
-                                return lhs.id < rhs.id
-                            }
-                            return lhs.lane > rhs.lane
-                        },
-                    edgePieces: edgePiecesByColumn[column] ?? []
-                )
-            }
+            Set(presentation.selectableNodeIDs)
         }
 
         private var selectedColumnID: Int? {
-            guard let selectedNodeID else { return nil }
-            return nodeByID[selectedNodeID]?.column
+            guard let selectedNodeID = presentation.selectedNodeID else { return nil }
+            return presentation.nodeByID[selectedNodeID]?.column
         }
 
         private var hoveredTooltip: HoveredTooltip? {
             guard let hoveredNodeID,
-                  let node = nodeByID[hoveredNodeID],
-                  let text = tooltipTextByNodeID[hoveredNodeID],
+                  let node = presentation.nodeByID[hoveredNodeID],
+                  let text = presentation.tooltipTextByNodeID[hoveredNodeID],
                   !text.isEmpty else {
                 return nil
             }
@@ -156,11 +97,11 @@ extension TraceViewerGraph {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: true) {
                         LazyHStack(spacing: 0) {
-                            ForEach(columns) { column in
+                            ForEach(presentation.columns) { column in
                                 TimelineOverviewColumnView(
                                     column: column,
                                     layout: layout,
-                                    selectedNodeID: selectedNodeID,
+                                    selectedNodeID: presentation.selectedNodeID,
                                     selectableNodeIDSet: selectableNodeIDSet,
                                     onSelectNode: onSelectNode,
                                     onHoverNode: updateHoveredNode
@@ -202,288 +143,6 @@ extension TraceViewerGraph {
             .frame(maxWidth: .infinity, minHeight: layout.graphHeight, maxHeight: layout.graphHeight)
         }
 
-        private func buildEdgePieces(
-            nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]]
-        ) -> [Int: [EdgePiece]] {
-            var edgePiecesByColumn: [Int: [EdgePiece]] = [:]
-
-            for node in nodes {
-                guard let nodeIndex = nodeIndexByID[node.id] else { continue }
-
-                for predecessorID in node.predecessorIDs {
-                    guard let predecessor = nodeByID[predecessorID],
-                          let predecessorIndex = nodeIndexByID[predecessorID],
-                          predecessorIndex < nodeIndex else {
-                        continue
-                    }
-
-                    let lineKind = node.edgeLineKindByPredecessorID[predecessorID] ?? .solid
-                    let color = edgeColor(
-                        for: lineKind,
-                        predecessorID: predecessorID,
-                        nodeID: node.id
-                    )
-
-                    appendPieces(
-                        from: predecessor,
-                        to: node,
-                        lineKind: lineKind,
-                        color: color,
-                        nodesByColumn: nodesByColumn,
-                        edgePiecesByColumn: &edgePiecesByColumn
-                    )
-                }
-            }
-
-            return edgePiecesByColumn
-        }
-
-        private func appendPieces(
-            from predecessor: TraceViewerGraph.OverviewGraphNode,
-            to node: TraceViewerGraph.OverviewGraphNode,
-            lineKind: TraceViewer.EdgeLineKind,
-            color: Color,
-            nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]],
-            edgePiecesByColumn: inout [Int: [EdgePiece]]
-        ) {
-            let edgeID = "\(predecessor.id)->\(node.id)"
-
-            if predecessor.column == node.column {
-                edgePiecesByColumn[node.column, default: []].append(
-                    .init(
-                        id: "\(edgeID):local",
-                        color: color,
-                        lineKind: lineKind,
-                        segment: .localCurve(
-                            startLane: predecessor.lane,
-                            endLane: node.lane
-                        )
-                    )
-                )
-                return
-            }
-
-            if predecessor.lane == node.lane {
-                appendHorizontalSegments(
-                    edgeID: edgeID,
-                    column: predecessor.column,
-                    lane: predecessor.lane,
-                    baseRange: layout.columnCenterX...layout.columnWidth,
-                    excludingNodeIDs: [predecessor.id],
-                    lineKind: lineKind,
-                    color: color,
-                    nodesByColumn: nodesByColumn,
-                    edgePiecesByColumn: &edgePiecesByColumn
-                )
-
-                if predecessor.column + 1 < node.column {
-                    for column in (predecessor.column + 1)..<node.column {
-                        appendHorizontalSegments(
-                            edgeID: edgeID,
-                            column: column,
-                            lane: node.lane,
-                            baseRange: 0...layout.columnWidth,
-                            excludingNodeIDs: [],
-                            lineKind: lineKind,
-                            color: color,
-                            nodesByColumn: nodesByColumn,
-                            edgePiecesByColumn: &edgePiecesByColumn
-                        )
-                    }
-                }
-
-                appendHorizontalSegments(
-                    edgeID: edgeID,
-                    column: node.column,
-                    lane: node.lane,
-                    baseRange: 0...layout.columnCenterX,
-                    excludingNodeIDs: [node.id],
-                    lineKind: lineKind,
-                    color: color,
-                    nodesByColumn: nodesByColumn,
-                    edgePiecesByColumn: &edgePiecesByColumn
-                )
-                return
-            }
-
-            if predecessor.lane < node.lane {
-                edgePiecesByColumn[predecessor.column, default: []].append(
-                    .init(
-                        id: "\(edgeID):source-curve",
-                        color: color,
-                        lineKind: lineKind,
-                        segment: .sourceCurve(
-                            startLane: predecessor.lane,
-                            endLane: node.lane
-                        )
-                    )
-                )
-
-                if predecessor.column + 1 < node.column {
-                    for column in (predecessor.column + 1)..<node.column {
-                        appendHorizontalSegments(
-                            edgeID: edgeID,
-                            column: column,
-                            lane: node.lane,
-                            baseRange: 0...layout.columnWidth,
-                            excludingNodeIDs: [],
-                            lineKind: lineKind,
-                            color: color,
-                            nodesByColumn: nodesByColumn,
-                            edgePiecesByColumn: &edgePiecesByColumn
-                        )
-                    }
-                }
-
-                appendHorizontalSegments(
-                    edgeID: edgeID,
-                    column: node.column,
-                    lane: node.lane,
-                    baseRange: 0...layout.columnCenterX,
-                    excludingNodeIDs: [node.id],
-                    lineKind: lineKind,
-                    color: color,
-                    nodesByColumn: nodesByColumn,
-                    edgePiecesByColumn: &edgePiecesByColumn
-                )
-                return
-            }
-
-            appendHorizontalSegments(
-                edgeID: edgeID,
-                column: predecessor.column,
-                lane: predecessor.lane,
-                baseRange: layout.columnCenterX...layout.columnWidth,
-                excludingNodeIDs: [predecessor.id],
-                lineKind: lineKind,
-                color: color,
-                nodesByColumn: nodesByColumn,
-                edgePiecesByColumn: &edgePiecesByColumn
-            )
-
-            if predecessor.column + 1 < node.column {
-                for column in (predecessor.column + 1)..<node.column {
-                    appendHorizontalSegments(
-                        edgeID: edgeID,
-                        column: column,
-                        lane: predecessor.lane,
-                        baseRange: 0...layout.columnWidth,
-                        excludingNodeIDs: [],
-                        lineKind: lineKind,
-                        color: color,
-                        nodesByColumn: nodesByColumn,
-                        edgePiecesByColumn: &edgePiecesByColumn
-                    )
-                }
-            }
-
-            edgePiecesByColumn[node.column, default: []].append(
-                .init(
-                    id: "\(edgeID):target-curve",
-                    color: color,
-                    lineKind: lineKind,
-                    segment: .targetCurve(
-                        startLane: predecessor.lane,
-                        endLane: node.lane
-                    )
-                )
-            )
-        }
-
-        private func appendHorizontalSegments(
-            edgeID: String,
-            column: Int,
-            lane: Int,
-            baseRange: ClosedRange<CGFloat>,
-            excludingNodeIDs: Set<String>,
-            lineKind: TraceViewer.EdgeLineKind,
-            color: Color,
-            nodesByColumn: [Int: [TraceViewerGraph.OverviewGraphNode]],
-            edgePiecesByColumn: inout [Int: [EdgePiece]]
-        ) {
-            let blockers = (nodesByColumn[column] ?? [])
-                .filter { node in
-                    node.lane == lane && !excludingNodeIDs.contains(node.id)
-                }
-                .sorted { $0.id < $1.id }
-
-            let segments = horizontalSegments(
-                in: baseRange,
-                blockers: blockers
-            )
-
-            for (index, segment) in segments.enumerated() {
-                edgePiecesByColumn[column, default: []].append(
-                    .init(
-                        id: "\(edgeID):horizontal:\(column):\(index)",
-                        color: color,
-                        lineKind: lineKind,
-                        segment: .horizontal(
-                            lane: lane,
-                            startX: segment.lowerBound,
-                            endX: segment.upperBound
-                        )
-                    )
-                )
-            }
-        }
-
-        private func horizontalSegments(
-            in baseRange: ClosedRange<CGFloat>,
-            blockers: [TraceViewerGraph.OverviewGraphNode]
-        ) -> [ClosedRange<CGFloat>] {
-            var segments = [baseRange]
-
-            for _ in blockers {
-                let blockerLower = max(layout.columnCenterX - layout.blockerClearance, 0)
-                let blockerUpper = min(layout.columnCenterX + layout.blockerClearance, layout.columnWidth)
-                let blockerRange = blockerLower...blockerUpper
-
-                segments = segments.flatMap { segment in
-                    split(segment: segment, removing: blockerRange)
-                }
-            }
-
-            return segments.filter { $0.upperBound - $0.lowerBound > 0.5 }
-        }
-
-        private func split(
-            segment: ClosedRange<CGFloat>,
-            removing blockerRange: ClosedRange<CGFloat>
-        ) -> [ClosedRange<CGFloat>] {
-            if blockerRange.upperBound <= segment.lowerBound || blockerRange.lowerBound >= segment.upperBound {
-                return [segment]
-            }
-
-            var result: [ClosedRange<CGFloat>] = []
-            if blockerRange.lowerBound > segment.lowerBound {
-                result.append(segment.lowerBound...min(blockerRange.lowerBound, segment.upperBound))
-            }
-            if blockerRange.upperBound < segment.upperBound {
-                result.append(max(blockerRange.upperBound, segment.lowerBound)...segment.upperBound)
-            }
-            return result
-        }
-
-        private func edgeColor(
-            for lineKind: TraceViewer.EdgeLineKind,
-            predecessorID: String,
-            nodeID: String
-        ) -> Color {
-            let baseColor: Color = {
-                switch lineKind {
-                case .solid:
-                    return ViewerTheme.solidBranchLine
-                case .dotted:
-                    return ViewerTheme.dottedBranchLine
-                }
-            }()
-
-            return baseColor.opacity(
-                min(graphOpacity(for: predecessorID), graphOpacity(for: nodeID))
-            )
-        }
-
         private func point(for node: TraceViewerGraph.OverviewGraphNode) -> CGPoint {
             CGPoint(
                 x: CGFloat(node.column) * layout.columnWidth + layout.columnCenterX,
@@ -518,10 +177,6 @@ extension TraceViewerGraph {
             }
         }
 
-        private func graphOpacity(for nodeID: String) -> Double {
-            selectableNodeIDSet.contains(nodeID) ? 1 : layout.mutedOpacity
-        }
-
         private func scrollToSelected(using proxy: ScrollViewProxy, animated: Bool) {
             guard let selectedColumnID else { return }
             if animated {
@@ -538,7 +193,7 @@ extension TraceViewerGraph {
 
 extension TraceViewerGraph {
     fileprivate struct TimelineOverviewColumnView: View {
-        let column: TimelineOverviewView.Column
+        let column: TraceViewerGraph.OverviewColumn
         let layout: TimelineOverviewView.Layout
         let selectedNodeID: String?
         let selectableNodeIDSet: Set<String>
@@ -552,7 +207,8 @@ extension TraceViewerGraph {
                 ForEach(column.edgePieces) { piece in
                     TimelineOverviewEdgePieceView(
                         piece: piece,
-                        layout: layout
+                        layout: layout,
+                        color: edgeColor(for: piece)
                     )
                 }
 
@@ -568,6 +224,23 @@ extension TraceViewerGraph {
                 }
             }
             .frame(width: layout.columnWidth, height: layout.graphHeight)
+        }
+
+        private func edgeColor(for piece: TraceViewerGraph.OverviewEdgePiece) -> Color {
+            let baseColor: Color = {
+                switch piece.lineKind {
+                case .solid:
+                    return ViewerTheme.solidBranchLine
+                case .dotted:
+                    return ViewerTheme.dottedBranchLine
+                }
+            }()
+
+            let opacity = min(
+                selectableNodeIDSet.contains(piece.predecessorID) ? 1 : layout.mutedOpacity,
+                selectableNodeIDSet.contains(piece.nodeID) ? 1 : layout.mutedOpacity
+            )
+            return baseColor.opacity(opacity)
         }
 
         private var baseline: some View {
@@ -587,13 +260,14 @@ extension TraceViewerGraph {
 
 extension TraceViewerGraph {
     fileprivate struct TimelineOverviewEdgePieceView: View {
-        let piece: TimelineOverviewView.EdgePiece
+        let piece: TraceViewerGraph.OverviewEdgePiece
         let layout: TimelineOverviewView.Layout
+        let color: Color
 
         var body: some View {
             path
                 .stroke(
-                    piece.color,
+                    color,
                     style: strokeStyle
                 )
                 .frame(width: layout.columnWidth, height: layout.graphHeight)

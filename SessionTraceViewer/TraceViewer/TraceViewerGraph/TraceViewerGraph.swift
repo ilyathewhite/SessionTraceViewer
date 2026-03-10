@@ -9,6 +9,20 @@ import Foundation
 import ReducerArchitecture
 
 enum TraceViewerGraph: StoreNamespace {
+    enum OverviewMetrics {
+        static let columnWidth: CGFloat = 48
+        static let laneSpacing: CGFloat = 34
+        static let verticalInset: CGFloat = 24
+        static let nodeRadius: CGFloat = 5
+        static let nodeHitArea: CGFloat = 30
+        static let selectionRingGap: CGFloat = 2
+        static let selectionRingThickness: CGFloat = 2
+        static let blockerClearance: CGFloat = nodeRadius + 3.2
+        static let tooltipVerticalOffset: CGFloat = 22
+        static let tooltipMaxWidth: CGFloat = 240
+        static let mutedOpacity: Double = 0.26
+    }
+
     struct PublishedValue: Equatable {
         let timelineID: String
         let shouldFocusTimelineList: Bool
@@ -40,6 +54,27 @@ enum TraceViewerGraph: StoreNamespace {
         let selectionTimelineID: String?
     }
 
+    struct OverviewEdgePiece: Identifiable, Equatable {
+        enum Segment: Equatable {
+            case horizontal(lane: Int, startX: CGFloat, endX: CGFloat)
+            case sourceCurve(startLane: Int, endLane: Int)
+            case targetCurve(startLane: Int, endLane: Int)
+            case localCurve(startLane: Int, endLane: Int)
+        }
+
+        let id: String
+        let predecessorID: String
+        let nodeID: String
+        let lineKind: TraceViewer.EdgeLineKind
+        let segment: Segment
+    }
+
+    struct OverviewColumn: Identifiable, Equatable {
+        let id: Int
+        let nodes: [OverviewGraphNode]
+        let edgePieces: [OverviewEdgePiece]
+    }
+
     typealias StoreEnvironment = Never
     typealias EffectAction = Never
 
@@ -51,10 +86,12 @@ enum TraceViewerGraph: StoreNamespace {
     }
 
     struct Presentation: Equatable {
-        var nodes: [OverviewGraphNode]
+        var columns: [OverviewColumn]
+        var nodeByID: [String: OverviewGraphNode]
         var selectableNodeIDs: [String]
         var tooltipTextByNodeID: [String: String]
         var selectedNodeID: String?
+        var visibleMaxLane: Int
         var maxLane: Int
         var timelineSelectionIDByNodeID: [String: String]
     }
@@ -65,8 +102,10 @@ enum TraceViewerGraph: StoreNamespace {
         let overviewGraphNodeByID: [String: OverviewGraphNode]
         let overviewGraphIDByTimelineID: [String: String]
         let overviewGraphMaxLane: Int
+        let overviewGraphTooltipTextByID: [String: String]
 
         var input: Input
+        var presentation: Presentation
     }
 }
 

@@ -27,12 +27,10 @@ extension TraceViewerGraph: StoreUINamespace {
         }
 
         private var overviewPanel: some View {
-            Nsp.TimelineOverviewView(
-                nodes: store.state.presentation.nodes,
-                selectableNodeIDs: store.state.presentation.selectableNodeIDs,
-                tooltipTextByNodeID: store.state.presentation.tooltipTextByNodeID,
-                selectedNodeID: store.state.presentation.selectedNodeID,
-                maxLane: store.state.presentation.maxLane,
+            let presentation = store.state.presentation
+
+            return Nsp.TimelineOverviewView(
+                presentation: presentation,
                 onSelectNode: { graphNodeID in
                     store.send(.mutating(.selectNode(id: graphNodeID, shouldFocusTimelineList: false)))
                 }
