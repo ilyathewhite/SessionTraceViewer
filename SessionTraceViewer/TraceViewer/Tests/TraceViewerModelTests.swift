@@ -10,8 +10,8 @@ extension ModelTests {
 
 extension ModelTests.TraceViewerModelTests {
     @Test
-    func testOverviewGraphKeepsStateNodesOnMainLane() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testOverviewGraphKeepsStateNodesOnMainLane() async throws {
+        let state = try await makeStateFromGeneratedTrace()
 
         let stateNodes = state.overviewGraphNodes.filter { $0.kind == .state }
         XCTAssertFalse(stateNodes.isEmpty)
@@ -21,8 +21,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testStateNodeTitlesUseInitialThenStateChange() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testStateNodeTitlesUseInitialThenStateChange() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let stateItems = state.itemsByID.values
             .filter { $0.kind == .state }
             .sorted { lhs, rhs in
@@ -42,8 +42,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testActionSubtitlesStartWithUserOrCode() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testActionSubtitlesStartWithUserOrCode() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let actionItems = state.itemsByID.values.compactMap { item -> (TraceViewer.TimelineItem, SessionGraph.ActionNode)? in
             guard case .action(let action) = item.node else { return nil }
             return (item, action)
@@ -67,8 +67,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testActionSubtitlesUseExactStoredCase() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testActionSubtitlesUseExactStoredCase() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let actionItems = state.itemsByID.values.compactMap { item -> (TraceViewer.TimelineItem, SessionGraph.ActionNode)? in
             guard case .action(let action) = item.node else { return nil }
             return (item, action)
@@ -86,7 +86,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testPublishAndCancelActionsUseFlowKind() throws {
+    func testPublishAndCancelActionsUseFlowKind() async throws {
         let state = try makeStateFromRecordMeetingTrace()
         let flowItems = state.itemsByID.values.compactMap { item -> TraceViewer.TimelineItem? in
             guard case .action(let action) = item.node else { return nil }
@@ -105,8 +105,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testStateValueRowsCarryComparisonValuesForChangedProperties() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testStateValueRowsCarryComparisonValuesForChangedProperties() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }
@@ -135,8 +135,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectEventKeepsTimelineAndGraphSelectionInSync() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectEventKeepsTimelineAndGraphSelectionInSync() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
             XCTFail("Trace did not contain enough visible nodes for selection test.")
             return
@@ -148,8 +148,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectEventEmitsFocusResetAndScrollEffectWhenSelectionChanges() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectEventEmitsFocusResetAndScrollEffectWhenSelectionChanges() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
             XCTFail("Trace did not contain enough visible nodes for selection effect test.")
             return
@@ -162,8 +162,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectEventDoesNotEmitScrollEffectWhenSelectionIsUnchanged() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectEventDoesNotEmitScrollEffectWhenSelectionIsUnchanged() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let selectedID = state.selectedID else {
             XCTFail("Trace did not contain an initial selection.")
             return
@@ -176,8 +176,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectEventWithoutFocusRequestDoesNotEmitFocusReset() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectEventWithoutFocusRequestDoesNotEmitFocusReset() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let targetID = state.visibleIDs.dropFirst().first else {
             XCTFail("Trace did not contain enough visible nodes for selection effect test.")
             return
@@ -190,8 +190,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectNextGraphNodeAdvancesToNextVisibleGraphNode() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testSelectNextGraphNodeAdvancesToNextVisibleGraphNode() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
         guard visibleGraphNodes.count > 1 else {
             XCTFail("Trace did not contain enough visible graph nodes for graph navigation test.")
@@ -215,8 +215,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testGraphSelectionUpdatePreservesCachedColumns() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testGraphSelectionUpdatePreservesCachedColumns() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         var graphState = state.graphState
         let initialColumns = graphState.presentation.columns
         let initialNodeByID = graphState.presentation.nodeByID
@@ -237,8 +237,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectPreviousGraphNodeMovesBackToPreviousVisibleGraphNode() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectPreviousGraphNodeMovesBackToPreviousVisibleGraphNode() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let visibleGraphNodes = state.visibleOverviewGraphNodes.compactMap(\.selectionTimelineID)
         guard visibleGraphNodes.count > 2 else {
             XCTFail("Trace did not contain enough visible graph nodes for graph navigation test.")
@@ -263,8 +263,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testToggleEventKindFilterKeepsTimelineAndOverviewVisible() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testToggleEventKindFilterKeepsTimelineAndOverviewVisible() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let visibleIDs = state.visibleIDs
         let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
         guard state.visibleItems.contains(where: { $0.kind == .mutation }) else {
@@ -284,8 +284,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testToggleUserEventFilterKeepsOnlyUserSourcedItemsSelectable() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testToggleUserEventFilterKeepsOnlyUserSourcedItemsSelectable() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let visibleIDs = state.visibleIDs
         let visibleGraphNodeIDs = state.visibleOverviewGraphNodes.map(\.id)
         guard state.visibleItems.contains(where: { $0.isUserSourceEvent }),
@@ -306,8 +306,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testFilterChangeSelectsFirstSelectableRowWhenCurrentSelectionIsFilteredOut() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testFilterChangeSelectsFirstSelectableRowWhenCurrentSelectionIsFilteredOut() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let stateIDs = state.visibleItems
             .filter { $0.kind == .state }
             .map(\.id)
@@ -324,8 +324,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectEventOnFilteredItemRestoresAllAndSelectsIt() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectEventOnFilteredItemRestoresAllAndSelectsIt() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let stateID = state.visibleItems.first(where: { $0.kind == .state })?.id,
               let mutationID = state.visibleItems.first(where: { $0.kind == .mutation })?.id else {
             XCTFail("Trace did not contain both state and mutation rows.")
@@ -341,8 +341,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectAllEventKindsRestoresExclusiveAllSelection() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectAllEventKindsRestoresExclusiveAllSelection() async throws {
+        var state = try await makeStateFromGeneratedTrace()
 
         _ = TraceViewerList.reduce(&state, .toggleEventKindFilter(.state))
         _ = TraceViewerList.reduce(&state, .selectAllEventKinds)
@@ -352,8 +352,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectNextVisibleSkipsFilteredItems() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectNextVisibleSkipsFilteredItems() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let stateIDs = state.visibleItems
             .filter { $0.kind == .state }
             .map(\.id)
@@ -370,8 +370,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSelectNextGraphNodeSkipsFilteredItems() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testSelectNextGraphNodeSkipsFilteredItems() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let stateGraphNodeIDs = state.visibleOverviewGraphNodes
             .compactMap(\.selectionTimelineID)
             .filter { id in
@@ -400,8 +400,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testCollapseHidesDescendantsInTimelineAndOverview() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testCollapseHidesDescendantsInTimelineAndOverview() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {
             XCTFail("Trace did not contain a collapsible node.")
             return
@@ -424,8 +424,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testReplaceTraceCollectionPreservesSelectionAndCollapsedState() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testReplaceTraceCollectionPreservesSelectionAndCollapsedState() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         guard let collapsibleID = state.visibleIDs.first(where: { state.hasChildren($0) }) else {
             XCTFail("Trace did not contain a collapsible node.")
             return
@@ -442,8 +442,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testReplaceTraceCollectionEmitsScrollEffectWhenSelectionChanges() throws {
-        var state = try makeStateFromGeneratedTrace()
+    func testReplaceTraceCollectionEmitsScrollEffectWhenSelectionChanges() async throws {
+        var state = try await makeStateFromGeneratedTrace()
         let replacementCollection = try makeStateFromRecordMeetingTrace().traceCollection
         let previousSelectedID = state.selectedID
 
@@ -512,7 +512,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingTimerEffectKeepsOneLaneForItsMutatingActions() throws {
+    func testRecordMeetingTimerEffectKeepsOneLaneForItsMutatingActions() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let startAction = state.itemsByID.values.first { item in
@@ -557,7 +557,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingTimerEffectActionsStayConnectedWhenAppliedNodesAreCollapsed() throws {
+    func testRecordMeetingTimerEffectActionsStayConnectedWhenAppliedNodesAreCollapsed() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let actionByID: [String: SessionGraph.ActionNode] = Dictionary(
@@ -609,7 +609,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingOverlappingEffectsUseDifferentLanes() throws {
+    func testRecordMeetingOverlappingEffectsUseDifferentLanes() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let actionByID: [String: SessionGraph.ActionNode] = Dictionary(
@@ -694,7 +694,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingAdjacentEffectStartReusesLaneWhenFirstHasNoContinuations() throws {
+    func testRecordMeetingAdjacentEffectStartReusesLaneWhenFirstHasNoContinuations() async throws {
         let state = try makeStateFromRecordMeetingTrace()
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
             guard case .action(let action) = item.node else { return nil }
@@ -725,7 +725,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingFirstMutationDoesNotUsePrepareSoundPlayerAsPredecessor() throws {
+    func testRecordMeetingFirstMutationDoesNotUsePrepareSoundPlayerAsPredecessor() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
@@ -758,8 +758,8 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testGeneratedTraceUserMutationHasStateInputAndStateResultEdges() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testGeneratedTraceUserMutationHasStateInputAndStateResultEdges() async throws {
+        let state = try await makeStateFromGeneratedTrace()
 
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
             guard case .action(let action) = item.node else { return nil }
@@ -796,7 +796,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingShowEndMeetingAlertHasSingleThreadContinuationEdge() throws {
+    func testRecordMeetingShowEndMeetingAlertHasSingleThreadContinuationEdge() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let showAlertActions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
@@ -820,7 +820,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingShowAlertEffectActionsStayOnShowAlertLane() throws {
+    func testRecordMeetingShowAlertEffectActionsStayOnShowAlertLane() async throws {
         let state = try makeStateFromRecordMeetingTrace()
         let actions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
             guard case .action(let action) = item.node else { return nil }
@@ -865,7 +865,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingHasAsyncDottedAndSyncSolidEdges() throws {
+    func testRecordMeetingHasAsyncDottedAndSyncSolidEdges() async throws {
         let state = try makeStateFromRecordMeetingTrace()
         var solidCount = 0
         var dottedCount = 0
@@ -895,7 +895,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingEffectSourcedMutationsDoNotUseInputStateAsDirectPredecessor() throws {
+    func testRecordMeetingEffectSourcedMutationsDoNotUseInputStateAsDirectPredecessor() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let inputStateByMutatingActionID = state.graph.edges.reduce(into: [String: String]()) {
@@ -936,7 +936,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingUserMutationHasOnlyStatePredecessor() throws {
+    func testRecordMeetingUserMutationHasOnlyStatePredecessor() async throws {
         let state = try makeStateFromRecordMeetingTrace()
 
         let userMutations = state.itemsByID.values
@@ -974,7 +974,7 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testRecordMeetingEffectSourcedActionsHaveAtMostOneIncomingEdge() throws {
+    func testRecordMeetingEffectSourcedActionsHaveAtMostOneIncomingEdge() async throws {
         let state = try makeStateFromRecordMeetingTrace()
         let effectSourcedActions = state.itemsByID.values.compactMap { item -> SessionGraph.ActionNode? in
             guard case .action(let action) = item.node else { return nil }

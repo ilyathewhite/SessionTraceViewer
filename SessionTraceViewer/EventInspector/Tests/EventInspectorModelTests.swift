@@ -10,8 +10,8 @@ extension ModelTests {
 
 extension ModelTests.EventInspectorModelTests {
     @Test
-    func testEventInspectorUpdateSelectionClearsTransientStateAndDismissesInlineDiff() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testEventInspectorUpdateSelectionClearsTransientStateAndDismissesInlineDiff() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }
@@ -49,8 +49,8 @@ extension ModelTests.EventInspectorModelTests {
     }
 
     @Test
-    func testEventInspectorInspectDiffUsesInlinePresentationForShortChanges() throws {
-        let state = try makeStateFromGeneratedTrace()
+    func testEventInspectorInspectDiffUsesInlinePresentationForShortChanges() async throws {
+        let state = try await makeStateFromGeneratedTrace()
         let stateItems = state.orderedIDs.compactMap { state.itemsByID[$0] }.filter { item in
             item.kind == .state
         }

@@ -44,7 +44,7 @@ enum LiveTrace: StoreNamespace {
             var lastUpdatedAt: Date
             var isEnded = false
             var startedAt: Date?
-            fileprivate var accumulator: SessionGraphAccumulator
+            fileprivate var accumulator: SessionTraceLiveAccumulator
 
             init(sessionID: String) {
                 self.id = sessionID
@@ -285,70 +285,5 @@ extension LiveTrace {
         .filter { !$0.isEmpty }
 
         return lines.isEmpty ? [fallback] : lines
-    }
-}
-
-private struct SessionGraphAccumulator {
-    var title: String
-
-    private let sessionID: String
-    private var schemaVersion: Int
-    private var storeInstanceID: SessionGraph.StoreInstanceID
-    private var nodesByID: [String: SessionGraph.Node]
-    private var edges: [SessionGraph.Edge]
-
-    init(
-        title: String,
-        sessionID: String
-    ) {
-        self.title = title
-        self.sessionID = sessionID
-        self.schemaVersion = SessionGraph.currentSchemaVersion
-        self.storeInstanceID = .init(rawValue: sessionID)
-        self.nodesByID = [:]
-        self.edges = []
-    }
-
-    mutating func replace(with traceCollection: SessionTraceCollection) {
-        title = traceCollection.title
-        schemaVersion = traceCollection.sessionGraph.schemaVersion
-        storeInstanceID = traceCollection.sessionGraph.storeInstanceID
-        nodesByID = Dictionary(
-            uniqueKeysWithValues: traceCollection.sessionGraph.nodes.map { ($0.id, $0) }
-        )
-        edges = traceCollection.sessionGraph.edges.sorted(by: Self.edgeSort)
-    }
-
-    mutating func apply(_ patch: SessionTraceLivePatch) {
-        switch patch {
-        case .upsertNode(let node):
-            nodesByID[node.id] = node
-
-        case .appendEdge(let edge):
-            edges.append(edge)
-        }
-    }
-
-    var traceCollection: SessionTraceCollection {
-        .init(
-            title: title,
-            sessionGraph: .init(
-                schemaVersion: schemaVersion,
-                storeInstanceID: storeInstanceID,
-                nodes: nodesByID.values.sorted(by: Self.nodeSort),
-                edges: edges.sorted(by: Self.edgeSort)
-            )
-        )
-    }
-
-    private static func nodeSort(lhs: SessionGraph.Node, rhs: SessionGraph.Node) -> Bool {
-        if lhs.order == rhs.order {
-            return lhs.id < rhs.id
-        }
-        return lhs.order < rhs.order
-    }
-
-    private static func edgeSort(lhs: SessionGraph.Edge, rhs: SessionGraph.Edge) -> Bool {
-        lhs.order < rhs.order
     }
 }
