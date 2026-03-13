@@ -19,10 +19,10 @@ extension LiveTrace: StoreUINamespace {
             self.store = store
             store.addChildIfNeeded(
                 TraceViewer.store(
-                    traceCollection: store.state.selectedSession?.traceCollection
+                    traceCollection: store.state.selectedTraceCollection
                         ?? .placeholder(
-                            title: "Live Trace",
-                            sessionID: "live-trace.placeholder"
+                            title: "Store Trace",
+                            storeInstanceID: "live-trace.placeholder.store"
                         )
                 )
             )
@@ -42,7 +42,7 @@ extension LiveTrace: StoreUINamespace {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 1320, minHeight: 900)
+            .frame(minWidth: 1460, minHeight: 900)
             .connectOnAppear {
                 let traceViewerStore = traceViewerStore
                 store.environment = .init(
@@ -79,14 +79,17 @@ extension LiveTrace: StoreUINamespace {
             if let session = store.state.selectedSession {
                 Nsp.SessionDetailView(
                     session: session,
-                    traceViewerStore: traceViewerStore
+                    traceViewerStore: traceViewerStore,
+                    selectStore: { storeID in
+                        store.send(.mutating(.selectStore(id: storeID)))
+                    }
                 )
             }
             else {
                 ContentUnavailableView(
                     "Waiting For Live Trace",
                     systemImage: "point.3.connected.trianglepath.dotted",
-                    description: Text("Enable `store.logConfig.liveTrace` in the traced app and keep SessionTraceViewer open.")
+                    description: Text("Configure `LiveTraceConfig.shared`, enable `store.logConfig.liveTraceEnabled = true` in the traced app, and keep SessionTraceViewer open.")
                 )
             }
         }
@@ -162,7 +165,7 @@ extension LiveTrace: StoreUINamespace {
 struct LiveTraceWindowView: View {
     @StateObject private var store: LiveTrace.Store
 
-    init(port: UInt16 = SessionTraceLiveDefaults.defaultPort) {
+    init(port: UInt16 = LiveTraceDefaults.defaultPort) {
         _store = StateObject(wrappedValue: LiveTrace.store(port: port))
     }
 

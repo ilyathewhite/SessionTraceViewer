@@ -18,16 +18,16 @@ final class LiveTraceServer {
         var description: String {
             switch self {
             case .starting(let port):
-                return "Starting listener on \(SessionTraceLiveDefaults.defaultHost):\(port)"
+                return "Starting listener on \(LiveTraceDefaults.defaultHost):\(port)"
             case .listening(let port):
-                return "Listening on \(SessionTraceLiveDefaults.defaultHost):\(port)"
+                return "Listening on \(LiveTraceDefaults.defaultHost):\(port)"
             case .failed(let message):
                 return message
             }
         }
     }
 
-    var onEnvelope: ((SessionTraceLiveEnvelope) -> Void)?
+    var onEnvelope: ((LiveTraceEnvelope) -> Void)?
     var onStatusChange: ((Status) -> Void)?
 
     private let port: UInt16
@@ -35,7 +35,7 @@ final class LiveTraceServer {
     private var listener: NWListener?
     private var connections: [UUID: ConnectionHandler] = [:]
 
-    init(port: UInt16 = SessionTraceLiveDefaults.defaultPort) {
+    init(port: UInt16 = LiveTraceDefaults.defaultPort) {
         self.port = port
     }
 
@@ -106,7 +106,7 @@ final class LiveTraceServer {
         handler.start(on: queue)
     }
 
-    private func publish(_ envelope: SessionTraceLiveEnvelope) {
+    private func publish(_ envelope: LiveTraceEnvelope) {
         Task { @MainActor [weak self] in
             self?.onEnvelope?(envelope)
         }
@@ -123,13 +123,13 @@ private final class ConnectionHandler {
     let id = UUID()
 
     private let connection: NWConnection
-    private let onEnvelope: (SessionTraceLiveEnvelope) -> Void
+    private let onEnvelope: (LiveTraceEnvelope) -> Void
     private let onClose: (UUID) -> Void
     private var buffer = Data()
 
     init(
         connection: NWConnection,
-        onEnvelope: @escaping (SessionTraceLiveEnvelope) -> Void,
+        onEnvelope: @escaping (LiveTraceEnvelope) -> Void,
         onClose: @escaping (UUID) -> Void
     ) {
         self.connection = connection
@@ -186,7 +186,7 @@ private final class ConnectionHandler {
         while let line = buffer.consumeLine() {
             guard !line.isEmpty else { continue }
             do {
-                let envelope = try JSONDecoder().decode(SessionTraceLiveEnvelope.self, from: line)
+                let envelope = try JSONDecoder().decode(LiveTraceEnvelope.self, from: line)
                 onEnvelope(envelope)
             }
             catch {

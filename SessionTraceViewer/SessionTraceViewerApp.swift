@@ -15,8 +15,8 @@ struct SessionTraceViewerApp: App {
         }
         .defaultSize(width: 960, height: 920)
 
-        DocumentGroup(viewing: SessionTraceDocument.self) { file in
-            SessionTraceDocumentView(document: file.document)
+        DocumentGroup(viewing: TraceSessionDocument.self) { file in
+            TraceSessionDocumentView(document: file.document)
         }
 
         WindowGroup("Value Diff", id: StringDiff.windowID, for: StringDiff.Input.self) { input in

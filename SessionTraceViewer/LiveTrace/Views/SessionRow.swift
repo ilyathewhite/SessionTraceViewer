@@ -1,5 +1,5 @@
 //
-//  LiveTraceSessionRow.swift
+//  SessionRow.swift
 //  SessionTraceViewer
 //
 //  Created by Codex on 3/7/26.
@@ -27,7 +27,7 @@ extension LiveTrace {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(session.isEnded ? ViewerTheme.cancel : ViewerTheme.publish)
+                        .fill(ViewerTheme.publish)
                         .frame(width: 8, height: 8)
                     Text(session.title)
                         .font(.headline)

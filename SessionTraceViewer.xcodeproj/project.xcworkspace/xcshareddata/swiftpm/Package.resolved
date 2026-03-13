@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ilyathewhite/FoundationEx.git",
       "state" : {
-        "revision" : "9bd512e635ca36401fade05ce47a203f7edddb1d",
-        "version" : "1.0.14"
+        "revision" : "99c5c6cf6ce3bdf92f98d06ab1bb0df6d50a6a51",
+        "version" : "1.0.15"
       }
     },
     {

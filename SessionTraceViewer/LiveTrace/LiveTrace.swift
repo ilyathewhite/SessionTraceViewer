@@ -21,8 +21,9 @@ enum LiveTrace: StoreNamespace {
         case selectSession(id: String)
         case selectPreviousSession
         case selectNextSession
+        case selectStore(id: String)
         case updateServerStatus(LiveTraceServer.Status)
-        case receiveEnvelope(SessionTraceLiveEnvelope)
+        case receiveEnvelope(LiveTraceEnvelope)
     }
 
     enum EffectAction {
@@ -33,39 +34,77 @@ enum LiveTrace: StoreNamespace {
 
     enum LiveUpdate: Sendable {
         case status(LiveTraceServer.Status)
-        case envelope(SessionTraceLiveEnvelope)
+        case envelope(LiveTraceEnvelope)
     }
 
     struct StoreState {
         struct Session: Identifiable {
             let id: String
-            var title: String
-            var subtitleLines: [String]
             var lastUpdatedAt: Date
-            var isEnded = false
-            var startedAt: Date?
-            fileprivate var accumulator: SessionTraceLiveAccumulator
+            var selectedStoreID: String?
+            fileprivate var accumulator: LiveTraceSessionAccumulator
 
             init(sessionID: String) {
                 self.id = sessionID
-                self.title = "Live Trace"
-                self.subtitleLines = [sessionID]
                 self.lastUpdatedAt = .now
+                self.selectedStoreID = nil
                 self.accumulator = .init(
                     title: "Live Trace",
                     sessionID: sessionID
                 )
             }
 
-            var traceCollection: SessionTraceCollection {
-                accumulator.traceCollection
+            var traceSession: TraceSession {
+                accumulator.session
+            }
+
+            var title: String {
+                traceSession.title
+            }
+
+            var subtitleLines: [String] {
+                LiveTrace.sessionSubtitleLines(
+                    session: traceSession,
+                    fallback: id
+                )
+            }
+
+            var startedAt: Date? {
+                traceSession.startedAt
+            }
+
+            var storeTraces: [TraceSession.StoreTrace] {
+                traceSession.storeTraces
+            }
+
+            var selectedStore: TraceSession.StoreTrace? {
+                traceSession.storeTrace(id: selectedStoreID)
+            }
+
+            var selectedTraceCollection: SessionTraceCollection? {
+                selectedStore?.traceCollection
+            }
+
+            var completedAt: Date? {
+                let endedAtValues = storeTraces.compactMap(\.endedAt)
+                guard !storeTraces.isEmpty, endedAtValues.count == storeTraces.count else {
+                    return nil
+                }
+                return endedAtValues.max()
             }
 
             var statusText: String {
-                if isEnded {
-                    return "Ended \(lastUpdatedAt.formatted(date: .omitted, time: .standard))"
+                if let completedAt {
+                    return "Completed \(completedAt.formatted(date: .omitted, time: .standard))"
                 }
                 return "Updated \(lastUpdatedAt.formatted(date: .omitted, time: .standard))"
+            }
+
+            var selectedStoreStatusText: String {
+                if let endedAt = selectedStore?.endedAt {
+                    return "Store ended \(endedAt.formatted(date: .omitted, time: .standard))"
+                }
+                return statusText
             }
 
             var startedAtText: String? {
@@ -74,34 +113,33 @@ enum LiveTrace: StoreNamespace {
                 }
             }
 
-            mutating func apply(metadata: SessionTraceLiveSessionMetadata) {
-                title = metadata.title
-                subtitleLines = LiveTrace.sessionSubtitleLines(
-                    metadata: metadata,
-                    fallback: id
-                )
-                startedAt = metadata.startedAt
-                isEnded = false
-                lastUpdatedAt = .now
-                accumulator.title = metadata.title
+            func storeSummaryText(for storeTrace: TraceSession.StoreTrace) -> String {
+                var parts = [
+                    "\(storeTrace.traceCollection.sessionGraph.nodes.count) nodes",
+                    "\(storeTrace.traceCollection.sessionGraph.edges.count) edges"
+                ]
+                if let endedAt = storeTrace.endedAt {
+                    parts.append("Ended \(endedAt.formatted(date: .omitted, time: .standard))")
+                }
+                return parts.joined(separator: " • ")
             }
 
-            mutating func apply(snapshot: SessionTraceCollection) {
-                accumulator.replace(with: snapshot)
-                title = snapshot.title
-                isEnded = false
-                lastUpdatedAt = .now
+            mutating func apply(_ envelope: LiveTraceEnvelope) {
+                accumulator.apply(envelope)
+                lastUpdatedAt = accumulator.lastUpdatedAt
+                normalizeSelectedStore()
             }
 
-            mutating func apply(patch: SessionTraceLivePatch) {
-                accumulator.apply(patch)
-                isEnded = false
-                lastUpdatedAt = .now
+            mutating func selectStore(id: String) {
+                guard storeTraces.contains(where: { $0.id == id }) else { return }
+                selectedStoreID = id
             }
 
-            mutating func markEnded() {
-                isEnded = true
-                lastUpdatedAt = .now
+            private mutating func normalizeSelectedStore() {
+                if selectedStoreID == nil ||
+                    !storeTraces.contains(where: { $0.id == selectedStoreID }) {
+                    selectedStoreID = storeTraces.first?.id
+                }
             }
         }
 
@@ -111,7 +149,7 @@ enum LiveTrace: StoreNamespace {
         var serverStatus: LiveTraceServer.Status
         private(set) var sessionsByID: [String: Session]
 
-        init(port: UInt16 = SessionTraceLiveDefaults.defaultPort) {
+        init(port: UInt16 = LiveTraceDefaults.defaultPort) {
             self.port = port
             self.serverStatus = .starting(port)
             self.sessionsByID = [:]
@@ -129,6 +167,10 @@ enum LiveTrace: StoreNamespace {
         var selectedSession: Session? {
             guard let selectedSessionID else { return nil }
             return sessionsByID[selectedSessionID]
+        }
+
+        var selectedTraceCollection: SessionTraceCollection? {
+            selectedSession?.selectedTraceCollection
         }
 
         mutating func selectSession(id: String) {
@@ -156,32 +198,22 @@ enum LiveTrace: StoreNamespace {
             self.selectedSessionID = sessions[nextIndex].id
         }
 
+        mutating func selectStore(id: String) {
+            guard let selectedSessionID,
+                  var session = sessionsByID[selectedSessionID] else {
+                return
+            }
+            session.selectStore(id: id)
+            sessionsByID[selectedSessionID] = session
+        }
+
         mutating func updateServerStatus(_ status: LiveTraceServer.Status) {
             serverStatus = status
         }
 
-        mutating func receiveEnvelope(_ envelope: SessionTraceLiveEnvelope) {
+        mutating func receiveEnvelope(_ envelope: LiveTraceEnvelope) {
             var session = sessionsByID[envelope.sessionID] ?? .init(sessionID: envelope.sessionID)
-            switch envelope.kind {
-            case .hello:
-                if let metadata = envelope.metadata {
-                    session.apply(metadata: metadata)
-                }
-
-            case .snapshot:
-                if let traceCollection = envelope.traceCollection {
-                    session.apply(snapshot: traceCollection)
-                }
-
-            case .patch:
-                if let patch = envelope.patch {
-                    session.apply(patch: patch)
-                }
-
-            case .end:
-                session.markEnded()
-            }
-
+            session.apply(envelope)
             sessionsByID[session.id] = session
             normalizeSelectedSession()
         }
@@ -198,7 +230,7 @@ extension LiveTrace {
     private static let listenEffectKey = "live-trace-listener"
 
     @MainActor
-    static func store(port: UInt16 = SessionTraceLiveDefaults.defaultPort) -> Store {
+    static func store(port: UInt16 = LiveTraceDefaults.defaultPort) -> Store {
         Store(.init(port: port), env: nil)
     }
 
@@ -228,6 +260,14 @@ extension LiveTrace {
             guard state.selectedSessionID != previousSelectedSessionID else { return .none }
             return .action(.effect(.syncSelectedTraceViewer))
 
+        case .selectStore(let id):
+            let previousSelectedStoreID = state.selectedSession?.selectedStore?.id
+            state.selectStore(id: id)
+            guard state.selectedSession?.selectedStore?.id != previousSelectedStoreID else {
+                return .none
+            }
+            return .action(.effect(.syncSelectedTraceViewer))
+
         case .updateServerStatus(let status):
             state.updateServerStatus(status)
             return .none
@@ -235,6 +275,9 @@ extension LiveTrace {
         case .receiveEnvelope(let envelope):
             state.receiveEnvelope(envelope)
             guard state.selectedSessionID == envelope.sessionID else { return .none }
+            guard state.selectedSession?.selectedStore?.id == envelope.storeInstanceID else {
+                return .none
+            }
             return .action(.effect(.syncSelectedTraceViewer))
         }
     }
@@ -249,7 +292,7 @@ extension LiveTrace {
         case .startListening:
             let port = state.port
             return .asyncActionSequenceLatest(key: listenEffectKey) { send in
-                if state.selectedSessionID != nil {
+                if state.selectedTraceCollection != nil {
                     send(.effect(.syncSelectedTraceViewer))
                 }
 
@@ -264,7 +307,7 @@ extension LiveTrace {
             }
 
         case .syncSelectedTraceViewer:
-            guard let traceCollection = state.selectedSession?.traceCollection else { return .none }
+            guard let traceCollection = state.selectedTraceCollection else { return .none }
             env.syncTraceViewer(traceCollection)
             return .none
         }
@@ -273,17 +316,31 @@ extension LiveTrace {
 
 extension LiveTrace {
     fileprivate static func sessionSubtitleLines(
-        metadata: SessionTraceLiveSessionMetadata,
+        session: TraceSession,
         fallback: String
     ) -> [String] {
-        let lines = [
-            metadata.storeName,
-            metadata.processName,
-            metadata.hostName
-        ]
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
+        var lines: [String] = []
+        lines.append(
+            session.storeTraces.count == 1
+                ? "1 store"
+                : "\(session.storeTraces.count) stores"
+        )
+
+        if let processName = normalized(session.processName),
+           processName != session.title {
+            lines.append(processName)
+        }
+
+        if let hostName = normalized(session.hostName) {
+            lines.append(hostName)
+        }
 
         return lines.isEmpty ? [fallback] : lines
+    }
+
+    fileprivate static func normalized(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

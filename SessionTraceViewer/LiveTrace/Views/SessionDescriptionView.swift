@@ -1,5 +1,5 @@
 //
-//  LiveTraceSessionDescriptionView.swift
+//  SessionDescriptionView.swift
 //  SessionTraceViewer
 //
 //  Created by Codex on 3/7/26.
