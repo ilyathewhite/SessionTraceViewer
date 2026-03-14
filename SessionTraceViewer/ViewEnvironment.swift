@@ -23,6 +23,11 @@ enum ViewerTheme {
     static let timelinePanelBackground = rgb(244, 246, 248)
     static let timelineGraphBackground = Color.white
     static let inspectorPanelBackground = rgb(240, 242, 245)
+    static let traceViewerContentBackground = rgb(238, 240, 243)
+    static let traceViewerScopeBarBackground = background
+    static let traceViewerInsetPanelBackground = traceViewerContentBackground
+    static let traceViewerInsetPanelInnerShadow = Color.black.opacity(0.034)
+    static let traceViewerScopeCapsuleShadow = Color.black.opacity(0.045)
     static let timelineGuide = rgb(235, 238, 241)
     static let solidBranchLine = rgb(154, 159, 165)
     static let dottedBranchLine = rgb(122, 127, 133)
@@ -32,11 +37,13 @@ enum ViewerTheme {
     static let rowFill = Color.white
     static let rowSelectedFill = rgb(225, 236, 251)
     static let rowSelectedStroke = rgb(171, 197, 236)
-    static let rowInactiveSelectedFill = rgb(234, 238, 242)
+    static let rowInactiveSelectedFill = rgb(227, 231, 236)
     static let rowInactiveSelectedStroke = rgb(208, 215, 223)
     static let rowStroke = rgb(223, 227, 231)
     static let rowTopHighlight = Color.white
     static let rowLiftShadow = Color.black.opacity(0.035)
+    static let listItemShadow = Color.black.opacity(0.045)
+    static let detailCardShadow = Color.black.opacity(0.045)
     static let badgeBackground = rgb(237, 240, 243)
     static let overviewStroke = rgb(223, 227, 231)
     static let overviewGuide = rgb(208, 222, 241)
@@ -282,7 +289,7 @@ struct ViewerListCardModifier: ViewModifier {
                     .padding(1)
             )
             .shadow(
-                color: ViewerTheme.rowLiftShadow,
+                color: ViewerTheme.listItemShadow,
                 radius: isSelected ? 3 : 1.4,
                 x: 0,
                 y: 1
@@ -310,6 +317,38 @@ struct ViewerPanelCardModifier: ViewModifier {
     }
 }
 
+struct ViewerInsetPanelModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                Rectangle()
+                    .fill(ViewerTheme.traceViewerInsetPanelBackground)
+            )
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [
+                        ViewerTheme.traceViewerInsetPanelInnerShadow,
+                        .clear
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 3)
+            }
+            .overlay(alignment: .leading) {
+                LinearGradient(
+                    colors: [
+                        ViewerTheme.traceViewerInsetPanelInnerShadow.opacity(0.7),
+                        .clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 3)
+            }
+    }
+}
+
 extension View {
     func viewerListCardStyle(selected: Bool = false, isFocused: Bool = true) -> some View {
         modifier(ViewerListCardModifier(isSelected: selected, isFocused: isFocused))
@@ -317,5 +356,9 @@ extension View {
 
     func viewerPanelCardStyle() -> some View {
         modifier(ViewerPanelCardModifier())
+    }
+
+    func viewerInsetPanelStyle() -> some View {
+        modifier(ViewerInsetPanelModifier())
     }
 }

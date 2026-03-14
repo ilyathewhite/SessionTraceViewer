@@ -27,6 +27,7 @@
 		A1B2C3062E00000600C831B2 /* TraceViewerDetailsUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3162E00001600C831B2 /* TraceViewerDetailsUI.swift */; };
 		A1B2C3072E00000700C831B2 /* TraceViewerGraphState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3172E00001700C831B2 /* TraceViewerGraphState.swift */; };
 		A1B2C3082E00000800C831B2 /* TraceViewerTimelineData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3182E00001800C831B2 /* TraceViewerTimelineData.swift */; };
+		A1B2C3092E00000900C831B2 /* TraceViewerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3192E00001900C831B2 /* TraceViewerState.swift */; };
 		09B2DD7E29BA167E00C831B2 /* ViewEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */; };
 		09B2DD8F29BB946800C831B2 /* TraceSessionDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD8E29BB946800C831B2 /* TraceSessionDocument.swift */; };
 		09B2DD9529BB98C200C831B2 /* TraceSessionDocumentUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B2DD9429BB98C200C831B2 /* TraceSessionDocumentUI.swift */; };
@@ -104,6 +105,7 @@
 		A1B2C3162E00001600C831B2 /* TraceViewerDetailsUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerDetailsUI.swift; sourceTree = "<group>"; };
 		A1B2C3172E00001700C831B2 /* TraceViewerGraphState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerGraphState.swift; sourceTree = "<group>"; };
 		A1B2C3182E00001800C831B2 /* TraceViewerTimelineData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerTimelineData.swift; sourceTree = "<group>"; };
+		A1B2C3192E00001900C831B2 /* TraceViewerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceViewerState.swift; sourceTree = "<group>"; };
 		09B2DD7D29BA167E00C831B2 /* ViewEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewEnvironment.swift; sourceTree = "<group>"; };
 		09B2DD8E29BB946800C831B2 /* TraceSessionDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceSessionDocument.swift; sourceTree = "<group>"; };
 		09B2DD9429BB98C200C831B2 /* TraceSessionDocumentUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceSessionDocumentUI.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				children = (
 					09B2DD7729B99E8900C831B2 /* TraceViewer.swift */,
 					09B2DD7929B99E9400C831B2 /* TraceViewerUI.swift */,
+					A1B2C3192E00001900C831B2 /* TraceViewerState.swift */,
 					A1B2C3182E00001800C831B2 /* TraceViewerTimelineData.swift */,
 					A1B2C3212E00002100C831B2 /* TraceViewerList */,
 					A1B2C3222E00002200C831B2 /* TraceViewerGraph */,
@@ -489,7 +492,7 @@
 			);
 			mainGroup = 09B2DD2C29B8FEDE00C831B2;
 			packageReferences = (
-				09B2DD6329B8FF4400C831B2 /* XCLocalSwiftPackageReference "../../Packages/ReducerArchitecture" */,
+				09B2DD6329B8FF4400C831B2 /* XCRemoteSwiftPackageReference "ReducerArchitecture" */,
 				09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */,
 			);
 			productRefGroup = 09B2DD3629B8FEDE00C831B2 /* Products */;
@@ -568,6 +571,7 @@
 					38B27273F67B4AB9A88CE96F /* TraceViewerTimelineOverviewView.swift in Sources */,
 					09F0A0522A00005200C831B2 /* TraceViewerListState.swift in Sources */,
 					A1B2C3082E00000800C831B2 /* TraceViewerTimelineData.swift in Sources */,
+					A1B2C3092E00000900C831B2 /* TraceViewerState.swift in Sources */,
 					A1B2C3012E00000100C831B2 /* TraceViewerList.swift in Sources */,
 					A1B2C3022E00000200C831B2 /* TraceViewerListUI.swift in Sources */,
 					A1B2C3032E00000300C831B2 /* TraceViewerGraph.swift in Sources */,
@@ -909,14 +913,15 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		09B2DD6329B8FF4400C831B2 /* XCLocalSwiftPackageReference "../../Packages/ReducerArchitecture" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../Packages/ReducerArchitecture;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
+		09B2DD6329B8FF4400C831B2 /* XCRemoteSwiftPackageReference "ReducerArchitecture" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ilyathewhite/ReducerArchitecture.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.9;
+			};
+		};
 		09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ilyathewhite/SwiftUIEx.git";
@@ -930,7 +935,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		09B2DD6429B8FF4400C831B2 /* ReducerArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 09B2DD6329B8FF4400C831B2 /* XCLocalSwiftPackageReference "../../Packages/ReducerArchitecture" */;
+			package = 09B2DD6329B8FF4400C831B2 /* XCRemoteSwiftPackageReference "ReducerArchitecture" */;
 			productName = ReducerArchitecture;
 		};
 		09F0A00D2A00000D00C831B2 /* SwiftUIEx */ = {

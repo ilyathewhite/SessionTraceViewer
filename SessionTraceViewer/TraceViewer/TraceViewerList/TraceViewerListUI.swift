@@ -16,7 +16,6 @@ extension TraceViewerList: StoreUINamespace {
         @State private var timelineListScrollCoordinator = TimelineListScrollCoordinator()
         @FocusState private var timelineListHasFocus: Bool
         @Environment(\.controlActiveState) private var controlActiveState
-        @Environment(\.resetFocus) private var resetFocus
 
         private let moveGraphSelection: ((Int) -> Void)?
 
@@ -31,12 +30,12 @@ extension TraceViewerList: StoreUINamespace {
 
         var body: some View {
             timelineListPanel
-                .background(ViewerTheme.timelinePanelBackground)
                 .connectOnAppear {
                     let timelineListScrollCoordinator = timelineListScrollCoordinator
+                    let timelineListFocus = $timelineListHasFocus
                     store.environment = .init(
                         resetTimelineListFocus: {
-                            resetFocus(in: timelineFocusScope)
+                            timelineListFocus.wrappedValue = true
                         },
                         scrollTimelineListToID: { id in
                             timelineListScrollCoordinator.scroll(to: id)
@@ -52,7 +51,7 @@ extension TraceViewerList: StoreUINamespace {
         private var timelineListPanel: some View {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 5) {
+                    LazyVStack(spacing: 6) {
                         ForEach(store.state.visibleItems) { item in
                             TimelineEventRow(
                                 item: item,
@@ -66,7 +65,10 @@ extension TraceViewerList: StoreUINamespace {
                             }
                         }
                     }
-                    .padding(10)
+                    .padding(.top, 10)
+                    .padding(.bottom, 10)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 0)
                 }
                 .contentShape(Rectangle())
                 .focusable(true, interactions: .edit)

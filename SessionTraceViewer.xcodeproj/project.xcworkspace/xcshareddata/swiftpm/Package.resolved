@@ -1,5 +1,5 @@
 {
-  "originHash" : "6f30543901839533ead9a876fd221b46a074d929414b457342cbdfa1dc35570a",
+  "originHash" : "29885d1f988c1154362d5ec4605e92e8b76c4dd6fd0082e99a1f920554dabb61",
   "pins" : [
     {
       "identity" : "asyncnavigation",
@@ -44,6 +44,15 @@
       "state" : {
         "revision" : "90af16da2d2756d2d297c005486b88b3e9971803",
         "version" : "0.18.0"
+      }
+    },
+    {
+      "identity" : "reducerarchitecture",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ilyathewhite/ReducerArchitecture.git",
+      "state" : {
+        "revision" : "6ad7fdf0a5316ccfe7974bb6c90e68e71780dc97",
+        "version" : "1.4.9"
       }
     },
     {

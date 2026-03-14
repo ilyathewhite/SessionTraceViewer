@@ -9,6 +9,26 @@ import ReducerArchitecture
 import SwiftUI
 
 extension TraceViewerDetails: StoreUINamespace {
+    struct SelectionContentView: View {
+        let selection: EventInspector.Selection
+        @StateObject private var eventInspectorStore: EventInspector.Store
+
+        init(selection: EventInspector.Selection) {
+            self.selection = selection
+            _eventInspectorStore = StateObject(
+                wrappedValue: EventInspector.store(selection: selection)
+            )
+        }
+
+        var body: some View {
+            eventInspectorStore.contentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: selection) { _, newSelection in
+                    eventInspectorStore.send(.mutating(.updateSelection(newSelection)))
+                }
+        }
+    }
+
     struct ContentView: StoreContentView {
         typealias Nsp = TraceViewerDetails
         @ObservedObject var store: Store
@@ -23,7 +43,6 @@ extension TraceViewerDetails: StoreUINamespace {
         var body: some View {
             eventInspectorStore.contentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(ViewerTheme.inspectorPanelBackground)
                 .connectOnAppear {
                     let eventInspectorStore = eventInspectorStore
                     eventInspectorStore.bind(to: store, on: \.selection) {

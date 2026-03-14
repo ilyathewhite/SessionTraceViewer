@@ -7,6 +7,39 @@ import Testing
 @Suite
 struct ModelTests {}
 
+extension ModelTests {
+    @Suite struct TraceSessionDocumentModelTests {}
+}
+
+extension ModelTests.TraceSessionDocumentModelTests {
+    @Test
+    func testNewTraceSessionDocumentStartsAsRecordingDocument() {
+        let document = TraceSessionDocument()
+
+        XCTAssertTrue(document.isRecording)
+        XCTAssertEqual(document.session.storeTraces.count, 0)
+        if case .recording(let port) = document.recordingMode {
+            XCTAssertEqual(port, LiveTraceDefaults.defaultPort)
+        }
+        else {
+            XCTFail("Expected a new trace session document to start in recording mode.")
+        }
+    }
+
+    @Test
+    func testLoadedTraceSessionDocumentIsStatic() {
+        let session = TraceSession.placeholder(
+            title: "Saved Session",
+            sessionID: "saved.session"
+        )
+        let document = TraceSessionDocument(loadedSession: session)
+
+        XCTAssertFalse(document.isRecording)
+        XCTAssertEqual(document.recordingMode, .staticTrace)
+        XCTAssertEqual(document.session, session)
+    }
+}
+
 enum TestTraceFeature: StoreNamespace {
     typealias PublishedValue = Void
 
@@ -120,6 +153,54 @@ func makeStateFromSyncScheduledEffectsTrace() async throws -> TraceViewerList.St
     return TraceViewerList.StoreState(traceCollection: collection)
 }
 
+@MainActor
+func makeCombinedTraceSessionForTests() async throws -> TraceSession {
+    let alphaCollection = try await makeStateFromGeneratedTrace().traceCollection
+    try await Task.sleep(for: .milliseconds(20))
+
+    let betaCollection = try await makeStateFromSyncScheduledEffectsTrace().traceCollection
+    try await Task.sleep(for: .milliseconds(20))
+
+    let gammaCollection = try await makeStateFromGeneratedTrace().traceCollection
+
+    return TraceSession(
+        sessionID: "combined.trace-session.tests",
+        title: "Combined Trace Session",
+        hostName: "Test Host",
+        processName: "SessionTraceViewerTests",
+        startedAt: Date(timeIntervalSince1970: 100),
+        storeTraces: [
+            .init(
+                storeInstanceID: "alpha.s1",
+                storeName: "Alpha Store",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 100),
+                endedAt: Date(timeIntervalSince1970: 110),
+                traceCollection: alphaCollection
+            ),
+            .init(
+                storeInstanceID: "beta.s2",
+                storeName: "Beta Store",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 105),
+                endedAt: Date(timeIntervalSince1970: 130),
+                traceCollection: betaCollection
+            ),
+            .init(
+                storeInstanceID: "gamma.s3",
+                storeName: "Gamma Store",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 140),
+                endedAt: Date(timeIntervalSince1970: 150),
+                traceCollection: gammaCollection
+            )
+        ]
+    )
+}
+
 func makeStateFromRecordMeetingTrace() throws -> TraceViewerList.StoreState {
     let traceURL = URL(fileURLWithPath: "/Users/ilya/Development/RecordMeeting.lzma")
     let data = try Data(contentsOf: traceURL)
@@ -131,6 +212,14 @@ func makeGraphState(from state: TraceViewerList.StoreState) -> TraceViewerGraph.
     .init(
         traceCollection: state.traceCollection,
         input: state.graphInput
+    )
+}
+
+func makeGraphInput(from viewerData: TraceViewer.ViewerData) -> TraceViewerGraph.Input {
+    .init(
+        visibleTimelineIDs: viewerData.orderedIDs,
+        selectableTimelineIDs: viewerData.orderedIDs,
+        selectedTimelineID: viewerData.orderedIDs.first
     )
 }
 

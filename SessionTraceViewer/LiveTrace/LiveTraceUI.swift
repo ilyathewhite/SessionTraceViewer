@@ -14,15 +14,19 @@ extension LiveTrace: StoreUINamespace {
         @ObservedObject var store: Store
         @FocusState private var sidebarHasFocus: Bool
         @Environment(\.controlActiveState) private var controlActiveState
+        @State private var exportDocument = TraceSessionDocument()
+        @State private var exportDefaultFilename = "TraceSession"
+        @State private var isExportingSession = false
+        @State private var exportErrorMessage: String?
 
         init(_ store: Store) {
             self.store = store
             store.addChildIfNeeded(
                 TraceViewer.store(
-                    traceCollection: store.state.selectedTraceCollection
+                    traceSession: store.state.selectedSession?.traceSession
                         ?? .placeholder(
-                            title: "Store Trace",
-                            storeInstanceID: "live-trace.placeholder.store"
+                            title: "Live Trace",
+                            sessionID: "live-trace.placeholder.session"
                         )
                 )
             )
@@ -47,11 +51,38 @@ extension LiveTrace: StoreUINamespace {
                 let traceViewerStore = traceViewerStore
                 store.environment = .init(
                     liveUpdates: Nsp.liveUpdates,
-                    syncTraceViewer: { [weak traceViewerStore] traceCollection in
-                        traceViewerStore?.send(.mutating(.replaceTraceCollection(traceCollection)))
+                    syncTraceViewer: { [weak traceViewerStore] traceSession in
+                        traceViewerStore?.send(.mutating(.replaceTraceSession(traceSession)))
                     }
                 )
                 store.send(.effect(.startListeningIfNeeded))
+            }
+            .fileExporter(
+                isPresented: $isExportingSession,
+                document: exportDocument,
+                contentType: .sessionTraceLZMA,
+                defaultFilename: exportDefaultFilename
+            ) { result in
+                if case .failure(let error) = result {
+                    exportErrorMessage = error.localizedDescription
+                }
+            }
+            .alert(
+                "Unable to Save Session",
+                isPresented: Binding(
+                    get: { exportErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            exportErrorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    exportErrorMessage = nil
+                }
+            } message: {
+                Text(exportErrorMessage ?? "")
             }
         }
 
@@ -80,8 +111,10 @@ extension LiveTrace: StoreUINamespace {
                 Nsp.SessionDetailView(
                     session: session,
                     traceViewerStore: traceViewerStore,
-                    selectStore: { storeID in
-                        store.send(.mutating(.selectStore(id: storeID)))
+                    saveSession: {
+                        exportDocument = .init(session: session.traceSession)
+                        exportDefaultFilename = session.exportFilename
+                        isExportingSession = true
                     }
                 )
             }
@@ -103,16 +136,23 @@ extension LiveTrace: StoreUINamespace {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(store.state.sessions) { session in
-                            Nsp.SessionRow(
-                                session: session,
-                                isSelected: session.id == store.state.selectedSessionID,
-                                selectionIsFocused: sidebarSelectionIsFocused
-                            )
-                            .id(session.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                store.send(.mutating(.selectSession(id: session.id)))
-                                sidebarHasFocus = true
+                            VStack(spacing: 0) {
+                                Nsp.SessionRow(
+                                    session: session,
+                                    isSelected: session.id == store.state.selectedSessionID,
+                                    selectionIsFocused: sidebarSelectionIsFocused
+                                )
+                                .id(session.id)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    store.send(.mutating(.selectSession(id: session.id)))
+                                    sidebarHasFocus = true
+                                }
+
+                                if session.id == store.state.selectedSessionID {
+                                    SessionStoreLayersView(traceViewerStore: traceViewerStore)
+                                        .padding(.leading, 18)
+                                }
                             }
                         }
                     }
@@ -171,5 +211,63 @@ struct LiveTraceWindowView: View {
 
     var body: some View {
         LiveTrace.ContentView(store)
+    }
+}
+
+private struct SessionStoreLayersView: View {
+    @ObservedObject var traceViewerStore: TraceViewer.Store
+
+    var body: some View {
+        ForEach(traceViewerStore.state.storeLayers) { storeLayer in
+            StoreLayerRow(
+                storeLayer: storeLayer,
+                setVisibility: { isVisible in
+                    traceViewerStore.send(
+                        .mutating(
+                            .setStoreVisibility(
+                                id: storeLayer.id,
+                                isVisible: isVisible
+                            )
+                        )
+                    )
+                }
+            )
+        }
+    }
+}
+
+private struct StoreLayerRow: View {
+    let storeLayer: TraceViewer.StoreLayer
+    let setVisibility: (Bool) -> Void
+
+    private var visibilitySymbolName: String {
+        storeLayer.isVisible ? "eye" : "eye.slash"
+    }
+
+    var body: some View {
+        Button(action: {
+            setVisibility(!storeLayer.isVisible)
+        }) {
+            HStack(spacing: 8) {
+                Text(storeLayer.displayName)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(ViewerTheme.primaryText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: visibilitySymbolName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(storeLayer.isVisible ? ViewerTheme.primaryText : ViewerTheme.secondaryText)
+                    .frame(width: 28, height: 28)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(storeLayer.isVisible ? "Hide Store" : "Show Store")
     }
 }

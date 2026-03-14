@@ -25,37 +25,40 @@ extension TraceViewerGraph.StoreState {
     }
 
     init(traceCollection: SessionTraceCollection, input: TraceViewerGraph.Input) {
-        let timelineData = TraceViewer.TimelineData(traceCollection: traceCollection)
-        let commitGraphLayout = TraceViewerGraph.buildCommitGraphLayout(
-            graph: traceCollection.sessionGraph,
-            orderedIDs: timelineData.orderedIDs,
-            itemsByID: timelineData.itemsByID,
-            parentByChildID: TraceViewerGraph.makeParentByChildID(from: traceCollection.sessionGraph.edges)
+        self.init(
+            viewerData: TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            ),
+            input: input
         )
-        let overviewGraphPresentation = TraceViewerGraph.buildOverviewGraphPresentation(
-            orderedTimelineIDs: timelineData.orderedIDs,
-            itemsByID: timelineData.itemsByID,
-            laneByTimelineID: commitGraphLayout.laneByID,
-            predecessorIDsByTimelineID: commitGraphLayout.predecessorIDsByID,
-            edgeLineKindByPredecessorID: commitGraphLayout.edgeLineKindByPredecessorID,
-            sharedColumnAnchorByID: commitGraphLayout.sharedColumnAnchorByID,
-            maxTimelineLane: commitGraphLayout.maxLane
+    }
+
+    init(viewerData: TraceViewer.ViewerData, input: TraceViewerGraph.Input) {
+        let timelineData = TraceViewer.TimelineData(
+            traceCollection: viewerData.primaryTraceCollection,
+            orderedIDs: viewerData.orderedIDs,
+            itemsByID: viewerData.itemsByID,
+            childrenByParentID: viewerData.childrenByParentID,
+            descendantCountByID: viewerData.descendantCountByID
         )
-        let tooltipTextByNodeID = timelineData.itemsByID.mapValues(\.title)
         let presentation = TraceViewerGraph.buildPresentation(
-            overviewGraphNodes: overviewGraphPresentation.nodes,
-            overviewGraphIDByTimelineID: overviewGraphPresentation.graphIDByTimelineID,
-            overviewGraphMaxLane: overviewGraphPresentation.maxLane,
-            tooltipTextByNodeID: tooltipTextByNodeID,
+            overviewGraphNodes: viewerData.overviewGraphNodes,
+            overviewGraphIDByTimelineID: viewerData.overviewGraphIDByTimelineID,
+            overviewGraphMaxLane: viewerData.overviewGraphMaxLane,
+            tooltipTextByNodeID: viewerData.overviewGraphTooltipTextByID,
+            trackRows: viewerData.graphTrackRows,
             input: input
         )
 
         self.timelineData = timelineData
-        self.overviewGraphNodes = overviewGraphPresentation.nodes
-        self.overviewGraphNodeByID = overviewGraphPresentation.nodeByID
-        self.overviewGraphIDByTimelineID = overviewGraphPresentation.graphIDByTimelineID
-        self.overviewGraphMaxLane = overviewGraphPresentation.maxLane
-        self.overviewGraphTooltipTextByID = tooltipTextByNodeID
+        self.overviewGraphNodes = viewerData.overviewGraphNodes
+        self.overviewGraphNodeByID = viewerData.overviewGraphNodeByID
+        self.overviewGraphIDByTimelineID = viewerData.overviewGraphIDByTimelineID
+        self.overviewGraphMaxLane = viewerData.overviewGraphMaxLane
+        self.overviewGraphTooltipTextByID = viewerData.overviewGraphTooltipTextByID
         self.input = input
         self.presentation = presentation
     }
@@ -101,9 +104,20 @@ extension TraceViewerGraph.StoreState {
         }
     }
 
-    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+    mutating func replaceViewerData(_ viewerData: TraceViewer.ViewerData) {
         let previousInput = input
-        self = .init(traceCollection: traceCollection, input: previousInput)
+        self = .init(viewerData: viewerData, input: previousInput)
+    }
+
+    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+        replaceViewerData(
+            TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            )
+        )
     }
 
     mutating func selectNode(
@@ -155,6 +169,7 @@ extension TraceViewerGraph.StoreState {
             overviewGraphIDByTimelineID: overviewGraphIDByTimelineID,
             overviewGraphMaxLane: overviewGraphMaxLane,
             tooltipTextByNodeID: overviewGraphTooltipTextByID,
+            trackRows: presentation.trackRows,
             input: input
         )
     }
@@ -200,6 +215,288 @@ extension TraceViewerGraph.StoreState {
 }
 
 extension TraceViewerGraph {
+    private static let trackLaneGap = 1
+
+    static func buildSource(
+        traceSession: TraceSession,
+        visibleStoreTraces: [TraceSession.StoreTrace],
+        localDataByStoreID: [String: TraceViewer.TimelineData],
+        orderedIDs: [String],
+        itemsByID: [String: TraceViewer.TimelineItem]
+    ) -> TraceViewerGraph.GraphSource {
+        guard let firstStoreTrace = visibleStoreTraces.first else {
+            return .init(
+                nodes: [],
+                nodeByID: [:],
+                graphIDByTimelineID: [:],
+                maxLane: 0,
+                tooltipTextByNodeID: [:],
+                trackRows: []
+            )
+        }
+
+        if visibleStoreTraces.count == 1,
+           let timelineData = localDataByStoreID[firstStoreTrace.id] {
+            let commitGraphLayout = buildCommitGraphLayout(
+                graph: firstStoreTrace.traceCollection.sessionGraph,
+                orderedIDs: timelineData.orderedIDs,
+                itemsByID: timelineData.itemsByID,
+                parentByChildID: makeParentByChildID(from: firstStoreTrace.traceCollection.sessionGraph.edges)
+            )
+            let overviewGraphPresentation = buildOverviewGraphPresentation(
+                orderedTimelineIDs: timelineData.orderedIDs,
+                itemsByID: timelineData.itemsByID,
+                laneByTimelineID: commitGraphLayout.laneByID,
+                predecessorIDsByTimelineID: commitGraphLayout.predecessorIDsByID,
+                edgeLineKindByPredecessorID: commitGraphLayout.edgeLineKindByPredecessorID,
+                sharedColumnAnchorByID: commitGraphLayout.sharedColumnAnchorByID,
+                maxTimelineLane: commitGraphLayout.maxLane,
+                storeInstanceID: firstStoreTrace.id
+            )
+            let tooltipTextByNodeID = timelineData.itemsByID.mapValues(\.title)
+            let maxColumn = overviewGraphPresentation.nodes.map(\.column).max() ?? 0
+            return .init(
+                nodes: overviewGraphPresentation.nodes,
+                nodeByID: overviewGraphPresentation.nodeByID,
+                graphIDByTimelineID: overviewGraphPresentation.graphIDByTimelineID,
+                maxLane: overviewGraphPresentation.maxLane,
+                tooltipTextByNodeID: tooltipTextByNodeID,
+                trackRows: [
+                    .init(
+                        id: 0,
+                        baseLane: 0,
+                        maxLane: overviewGraphPresentation.maxLane,
+                        segments: [
+                            .init(
+                                id: firstStoreTrace.id,
+                                storeInstanceID: firstStoreTrace.id,
+                                storeName: firstStoreTrace.displayName,
+                                startColumn: 0,
+                                endColumn: maxColumn,
+                                baseLane: 0,
+                                maxLane: overviewGraphPresentation.maxLane,
+                                trackMaxLane: overviewGraphPresentation.maxLane,
+                                showsDivider: false
+                            )
+                        ]
+                    )
+                ]
+            )
+        }
+
+        struct StoreLayout {
+            let storeTrace: TraceSession.StoreTrace
+            let timelineData: TraceViewer.TimelineData
+            let commitGraphLayout: TraceViewerGraph.StoreState.CommitGraphLayout
+            let firstDate: Date?
+            let lastDate: Date?
+        }
+
+        let storeOrderByID = Dictionary(
+            uniqueKeysWithValues: visibleStoreTraces.enumerated().map { ($1.id, $0) }
+        )
+        let globalColumnByTimelineID = Dictionary(
+            uniqueKeysWithValues: orderedIDs.enumerated().map { ($1, $0) }
+        )
+        let sessionEndColumn = max(orderedIDs.count - 1, 0)
+
+        let allStoreTraces = traceSession.storeTraces.filter { localDataByStoreID[$0.id] != nil }
+        let storeLayouts: [StoreLayout] = allStoreTraces.compactMap { storeTrace in
+            guard let timelineData = localDataByStoreID[storeTrace.id] else { return nil }
+            let commitGraphLayout = buildCommitGraphLayout(
+                graph: storeTrace.traceCollection.sessionGraph,
+                orderedIDs: timelineData.orderedIDs,
+                itemsByID: timelineData.itemsByID,
+                parentByChildID: makeParentByChildID(from: storeTrace.traceCollection.sessionGraph.edges)
+            )
+            let dates = timelineData.orderedIDs.compactMap { timelineData.itemsByID[$0]?.date }
+            return .init(
+                storeTrace: storeTrace,
+                timelineData: timelineData,
+                commitGraphLayout: commitGraphLayout,
+                firstDate: dates.min(),
+                lastDate: dates.max()
+            )
+        }
+
+        let sortedLayouts = storeLayouts.sorted { lhs, rhs in
+            let lhsStart = lhs.storeTrace.startedAt ?? lhs.firstDate ?? .distantPast
+            let rhsStart = rhs.storeTrace.startedAt ?? rhs.firstDate ?? .distantPast
+            if lhsStart != rhsStart {
+                return lhsStart < rhsStart
+            }
+            return (storeOrderByID[lhs.storeTrace.id] ?? .max)
+                < (storeOrderByID[rhs.storeTrace.id] ?? .max)
+        }
+
+        var nextTrackID = 0
+        var availableUntilByTrackID: [Int: Date] = [:]
+        var trackIDByStoreID: [String: Int] = [:]
+
+        for layout in sortedLayouts {
+            let start = layout.storeTrace.startedAt ?? layout.firstDate ?? .distantPast
+            let availableTrackIDs = availableUntilByTrackID
+                .filter { $0.value <= start }
+                .map(\.key)
+                .sorted()
+            let trackID = availableTrackIDs.first ?? {
+                defer { nextTrackID += 1 }
+                return nextTrackID
+            }()
+            trackIDByStoreID[layout.storeTrace.id] = trackID
+            availableUntilByTrackID[trackID] = layout.storeTrace.endedAt ?? .distantFuture
+        }
+
+        let visibleStoreIDSet = Set(visibleStoreTraces.map(\.id))
+        let visibleLayoutsByTrackID = Dictionary(
+            grouping: sortedLayouts.filter { visibleStoreIDSet.contains($0.storeTrace.id) }
+        ) { layout in
+            trackIDByStoreID[layout.storeTrace.id] ?? 0
+        }
+
+        let trackIDs = visibleLayoutsByTrackID.keys.sorted()
+        var baseLaneByTrackID: [Int: Int] = [:]
+        var runningBaseLane = 0
+        for trackID in trackIDs {
+            baseLaneByTrackID[trackID] = runningBaseLane
+            let maxTrackLane = visibleLayoutsByTrackID[trackID]?
+                .map(\.commitGraphLayout.maxLane)
+                .max() ?? 0
+            runningBaseLane += maxTrackLane + 1 + trackLaneGap
+        }
+
+        var nodes: [TraceViewerGraph.OverviewGraphNode] = []
+        var nodeByID: [String: TraceViewerGraph.OverviewGraphNode] = [:]
+        var graphIDByTimelineID: [String: String] = [:]
+        var tooltipTextByNodeID: [String: String] = [:]
+        var trackRows: [TraceViewerGraph.TrackRow] = []
+        var maxLane = 0
+
+        for trackID in trackIDs {
+            let trackLayouts = (visibleLayoutsByTrackID[trackID] ?? []).sorted { lhs, rhs in
+                let lhsStart = lhs.storeTrace.startedAt ?? lhs.firstDate ?? .distantPast
+                let rhsStart = rhs.storeTrace.startedAt ?? rhs.firstDate ?? .distantPast
+                if lhsStart != rhsStart {
+                    return lhsStart < rhsStart
+                }
+                return lhs.storeTrace.id < rhs.storeTrace.id
+            }
+            let baseLane = baseLaneByTrackID[trackID] ?? 0
+            let trackMaxLane = trackLayouts
+                .map { baseLane + $0.commitGraphLayout.maxLane }
+                .max() ?? baseLane
+            maxLane = max(maxLane, trackMaxLane)
+
+            let segments: [TraceViewerGraph.TrackSegment] = trackLayouts.enumerated().compactMap { index, layout in
+                let timelineIDs = layout.timelineData.orderedIDs.map {
+                    TraceViewer.scopedTimelineID(
+                        storeInstanceID: layout.storeTrace.id,
+                        localNodeID: $0
+                    )
+                }
+                let columns = timelineIDs.compactMap { globalColumnByTimelineID[$0] }
+                guard let startColumn = columns.min(), let eventEndColumn = columns.max() else {
+                    return nil
+                }
+                let endColumn = layout.storeTrace.endedAt == nil ? sessionEndColumn : eventEndColumn
+                return .init(
+                    id: layout.storeTrace.id,
+                    storeInstanceID: layout.storeTrace.id,
+                    storeName: layout.storeTrace.displayName,
+                    startColumn: startColumn,
+                    endColumn: endColumn,
+                    baseLane: baseLane,
+                    maxLane: baseLane + layout.commitGraphLayout.maxLane,
+                    trackMaxLane: trackMaxLane,
+                    showsDivider: index > 0
+                )
+            }
+
+            for layout in trackLayouts {
+                let predecessorIDsByLocalID = layout.commitGraphLayout.predecessorIDsByID
+                let lineKindByPredecessorID = layout.commitGraphLayout.edgeLineKindByPredecessorID
+                for localID in layout.timelineData.orderedIDs {
+                    guard let item = layout.timelineData.itemsByID[localID] else { continue }
+                    let globalID = TraceViewer.scopedTimelineID(
+                        storeInstanceID: layout.storeTrace.id,
+                        localNodeID: localID
+                    )
+                    guard let column = globalColumnByTimelineID[globalID] else { continue }
+                    let predecessorIDs = (predecessorIDsByLocalID[localID] ?? []).map {
+                        TraceViewer.scopedTimelineID(
+                            storeInstanceID: layout.storeTrace.id,
+                            localNodeID: $0
+                        )
+                    }
+                    let edgeLineKindByGlobalPredecessorID = Dictionary(
+                        uniqueKeysWithValues: (lineKindByPredecessorID[localID] ?? [:]).map { pair in
+                            (
+                                TraceViewer.scopedTimelineID(
+                                    storeInstanceID: layout.storeTrace.id,
+                                    localNodeID: pair.key
+                                ),
+                                pair.value
+                            )
+                        }
+                    )
+                    let localLane = layout.commitGraphLayout.laneByID[localID]
+                        ?? (item.kind == .state ? 0 : 1)
+                    let node = TraceViewerGraph.OverviewGraphNode(
+                        id: globalID,
+                        storeInstanceID: layout.storeTrace.id,
+                        kind: overviewKind(for: item.kind),
+                        colorKind: item.colorKind,
+                        column: column,
+                        lane: baseLane + localLane,
+                        predecessorIDs: predecessorIDs,
+                        edgeLineKindByPredecessorID: edgeLineKindByGlobalPredecessorID,
+                        timelineID: globalID,
+                        selectionTimelineID: globalID
+                    )
+                    nodes.append(node)
+                    nodeByID[node.id] = node
+                    graphIDByTimelineID[globalID] = globalID
+                    tooltipTextByNodeID[globalID] = item.title
+                }
+            }
+
+            trackRows.append(
+                .init(
+                    id: trackID,
+                    baseLane: baseLane,
+                    maxLane: trackMaxLane,
+                    segments: segments
+                )
+            )
+        }
+
+        return .init(
+            nodes: nodes,
+            nodeByID: nodeByID,
+            graphIDByTimelineID: graphIDByTimelineID,
+            maxLane: maxLane,
+            tooltipTextByNodeID: tooltipTextByNodeID,
+            trackRows: trackRows
+        )
+    }
+
+    private static func overviewKind(
+        for eventKind: TraceViewer.EventKind
+    ) -> TraceViewerGraph.OverviewGraphNode.Kind {
+        switch eventKind {
+        case .state:
+            return .state
+        case .flow:
+            return .flow
+        case .mutation:
+            return .mutation
+        case .effect:
+            return .effect
+        case .batch:
+            return .batch
+        }
+    }
+
     static func makeParentByChildID(
         from edges: [SessionGraph.Edge]
     ) -> [String: String] {
@@ -754,19 +1051,9 @@ extension TraceViewerGraph {
         predecessorIDsByTimelineID: [String: [String]],
         edgeLineKindByPredecessorID: [String: [String: TraceViewer.EdgeLineKind]],
         sharedColumnAnchorByID: [String: String],
-        maxTimelineLane: Int
+        maxTimelineLane: Int,
+        storeInstanceID: String
     ) -> TraceViewerGraph.StoreState.OverviewGraphPresentation {
-        var graphLaneByTimelineID = laneByTimelineID.mapValues { max($0, 1) }
-        for timelineID in orderedTimelineIDs {
-            guard let item = itemsByID[timelineID] else { continue }
-            if case .state = item.node {
-                graphLaneByTimelineID[timelineID] = 0
-            }
-            else if graphLaneByTimelineID[timelineID] == nil {
-                graphLaneByTimelineID[timelineID] = 1
-            }
-        }
-
         let knownGraphNodeIDs = Set(orderedTimelineIDs)
         var nodes: [TraceViewerGraph.OverviewGraphNode] = []
         nodes.reserveCapacity(orderedTimelineIDs.count)
@@ -805,12 +1092,13 @@ extension TraceViewerGraph {
 
             let lane: Int = {
                 if case .state = item.node { return 0 }
-                return max(graphLaneByTimelineID[timelineID] ?? 1, 1)
+                return max(laneByTimelineID[timelineID] ?? 1, 1)
             }()
             maxLane = max(maxLane, lane)
 
             let node = TraceViewerGraph.OverviewGraphNode(
                 id: timelineID,
+                storeInstanceID: storeInstanceID,
                 kind: kind,
                 colorKind: item.colorKind,
                 column: column,
@@ -840,6 +1128,7 @@ extension TraceViewerGraph {
         overviewGraphIDByTimelineID: [String: String],
         overviewGraphMaxLane: Int,
         tooltipTextByNodeID: [String: String],
+        trackRows: [TraceViewerGraph.TrackRow],
         input: TraceViewerGraph.Input
     ) -> TraceViewerGraph.Presentation {
         let visibleTimelineIDSet = Set(input.visibleTimelineIDs)
@@ -866,6 +1155,7 @@ extension TraceViewerGraph {
             selectedNodeID: input.selectedTimelineID.flatMap { overviewGraphIDByTimelineID[$0] },
             visibleMaxLane: visibleMaxLane,
             maxLane: overviewGraphMaxLane,
+            trackRows: trackRows,
             timelineSelectionIDByNodeID: Dictionary(
                 uniqueKeysWithValues: visibleNodes.compactMap { node in
                     guard let selectionTimelineID = node.selectionTimelineID else { return nil }

@@ -19,16 +19,30 @@ extension TraceViewerList.StoreState {
     }
 
     init(traceCollection: SessionTraceCollection) {
-        let timelineData = TraceViewer.TimelineData(traceCollection: traceCollection)
+        self.init(
+            viewerData: TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            )
+        )
+    }
 
-        self.traceCollection = timelineData.traceCollection
-        self.orderedIDs = timelineData.orderedIDs
-        self.itemsByID = timelineData.itemsByID
-        self.childrenByParentID = timelineData.childrenByParentID
-        self.descendantCountByID = timelineData.descendantCountByID
+    init(viewerData: TraceViewer.ViewerData) {
+        self.traceCollection = viewerData.primaryTraceCollection
+        self.visibleStoreCount = viewerData.visibleStoreTraces.count
+        self.orderedIDs = viewerData.orderedIDs
+        self.itemsByID = viewerData.itemsByID
+        self.childrenByParentID = viewerData.childrenByParentID
+        self.descendantCountByID = viewerData.descendantCountByID
         self.scopeFilter = .all
         self.collapsedIDs = []
-        self.selectedID = timelineData.orderedIDs.first
+        self.selectedID = viewerData.orderedIDs.first
+    }
+
+    var hasVisibleStores: Bool {
+        visibleStoreCount > 0
     }
 
     var visibleIDs: [String] {
@@ -110,7 +124,8 @@ extension TraceViewerList.StoreState {
 
         for index in stride(from: selectedIndex - 1, through: 0, by: -1) {
             guard let item = itemsByID[orderedIDs[index]] else { continue }
-            if case .state = item.node {
+            if item.storeInstanceID == selectedItem.storeInstanceID,
+               case .state = item.node {
                 return item
             }
         }
@@ -309,18 +324,93 @@ extension TraceViewerList.StoreState {
         clampSelection()
     }
 
-    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+    mutating func replaceViewerData(_ viewerData: TraceViewer.ViewerData) {
         let previousSelectedID = selectedID
+        let previousSelectedItem = previousSelectedID.flatMap { itemsByID[$0] }
         let previousCollapsedIDs = collapsedIDs
         let previousScopeFilter = scopeFilter
 
-        self = .init(traceCollection: traceCollection)
+        self = .init(viewerData: viewerData)
         scopeFilter = previousScopeFilter
         collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
         if let previousSelectedID,
            itemsByID[previousSelectedID] != nil {
             selectedID = previousSelectedID
+            clampSelection(anchorID: previousSelectedID)
+            return
         }
-        clampSelection(anchorID: previousSelectedID)
+
+        if let previousSelectedItem,
+           let matchingSelectedID = selectionID(matching: previousSelectedItem) {
+            selectedID = matchingSelectedID
+            clampSelection(anchorID: matchingSelectedID)
+            return
+        }
+
+        guard let previousSelectedItem else {
+            clampSelection()
+            return
+        }
+
+        let selectableVisibleIDs = selectableVisibleIDs
+        guard !selectableVisibleIDs.isEmpty else {
+            selectedID = nil
+            return
+        }
+
+        if let nextID = selectableVisibleIDs.first(where: { candidateID in
+            guard let candidate = itemsByID[candidateID] else { return false }
+            return Self.compareSelectionPosition(
+                previous: previousSelectedItem,
+                candidate: candidate
+            )
+        }) {
+            selectedID = nextID
+        }
+        else {
+            selectedID = selectableVisibleIDs.last
+        }
+    }
+
+    func selectionID(matching previousSelectedItem: TraceViewer.TimelineItem) -> String? {
+        itemsByID.values.first { candidate in
+            candidate.storeInstanceID == previousSelectedItem.storeInstanceID
+                && candidate.localNodeID == previousSelectedItem.localNodeID
+        }?.id
+    }
+
+    static func compareSelectionPosition(
+        previous: TraceViewer.TimelineItem,
+        candidate: TraceViewer.TimelineItem
+    ) -> Bool {
+        switch (previous.date, candidate.date) {
+        case let (previousDate?, candidateDate?) where previousDate != candidateDate:
+            return candidateDate > previousDate
+        case (.some, nil):
+            return false
+        case (nil, .some):
+            return true
+        default:
+            break
+        }
+
+        if previous.storeInstanceID == candidate.storeInstanceID {
+            return candidate.order > previous.order
+        }
+        if previous.order != candidate.order {
+            return candidate.order > previous.order
+        }
+        return candidate.id > previous.id
+    }
+
+    mutating func replaceTraceCollection(_ traceCollection: SessionTraceCollection) {
+        replaceViewerData(
+            TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            )
+        )
     }
 }

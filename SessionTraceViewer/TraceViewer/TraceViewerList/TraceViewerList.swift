@@ -17,6 +17,7 @@ enum TraceViewerList: StoreNamespace {
     }
 
     enum MutatingAction {
+        case replaceViewerData(TraceViewer.ViewerData)
         case replaceTraceCollection(SessionTraceCollection)
         case selectEvent(id: String, shouldFocus: Bool)
         case selectAllEventKinds
@@ -51,6 +52,7 @@ enum TraceViewerList: StoreNamespace {
         }
 
         let traceCollection: SessionTraceCollection
+        let visibleStoreCount: Int
         let orderedIDs: [String]
         let itemsByID: [String: TraceViewer.TimelineItem]
         let childrenByParentID: [String: [String]]
@@ -89,8 +91,20 @@ extension TraceViewerList {
     }
 
     @MainActor
+    static func store(viewerData: TraceViewer.ViewerData) -> Store {
+        Store(.init(viewerData: viewerData), env: nil)
+    }
+
+    @MainActor
     static func store(traceCollection: SessionTraceCollection) -> Store {
-        Store(.init(traceCollection: traceCollection), env: nil)
+        store(
+            viewerData: TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            )
+        )
     }
 
     @MainActor
@@ -99,6 +113,9 @@ extension TraceViewerList {
         var shouldResetTimelineListFocus = false
 
         switch action {
+        case .replaceViewerData(let viewerData):
+            state.replaceViewerData(viewerData)
+
         case .replaceTraceCollection(let traceCollection):
             state.replaceTraceCollection(traceCollection)
 

@@ -19,11 +19,21 @@ extension TraceViewerGraph: StoreUINamespace {
 
         var body: some View {
             overviewPanel
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 10)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(ViewerTheme.overviewAreaBackground)
+                .viewerInsetPanelStyle()
+                .overlay(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [
+                            ViewerTheme.traceViewerInsetPanelInnerShadow,
+                            .clear
+                        ],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                    .frame(height: 3)
+                    .allowsHitTesting(false)
+                }
+                .background(ViewerTheme.traceViewerContentBackground)
         }
 
         private var overviewPanel: some View {
@@ -35,9 +45,6 @@ extension TraceViewerGraph: StoreUINamespace {
                     store.send(.mutating(.selectNode(id: graphNodeID, shouldFocusTimelineList: false)))
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .padding(8)
-            .viewerPanelCardStyle()
         }
     }
 }

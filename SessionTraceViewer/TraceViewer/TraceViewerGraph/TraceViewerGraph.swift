@@ -44,6 +44,7 @@ enum TraceViewerGraph: StoreNamespace {
         }
 
         let id: String
+        let storeInstanceID: String
         let kind: Kind
         let colorKind: TraceViewer.EventColorKind
         let column: Int
@@ -75,10 +76,39 @@ enum TraceViewerGraph: StoreNamespace {
         let edgePieces: [OverviewEdgePiece]
     }
 
+    struct TrackSegment: Identifiable, Equatable {
+        let id: String
+        let storeInstanceID: String
+        let storeName: String
+        let startColumn: Int
+        let endColumn: Int
+        let baseLane: Int
+        let maxLane: Int
+        let trackMaxLane: Int
+        let showsDivider: Bool
+    }
+
+    struct TrackRow: Identifiable, Equatable {
+        let id: Int
+        let baseLane: Int
+        let maxLane: Int
+        let segments: [TrackSegment]
+    }
+
+    struct GraphSource {
+        let nodes: [OverviewGraphNode]
+        let nodeByID: [String: OverviewGraphNode]
+        let graphIDByTimelineID: [String: String]
+        let maxLane: Int
+        let tooltipTextByNodeID: [String: String]
+        let trackRows: [TrackRow]
+    }
+
     typealias StoreEnvironment = Never
     typealias EffectAction = Never
 
     enum MutatingAction {
+        case replaceViewerData(TraceViewer.ViewerData)
         case replaceTraceCollection(SessionTraceCollection)
         case updateInput(Input)
         case selectNode(id: String, shouldFocusTimelineList: Bool)
@@ -93,6 +123,7 @@ enum TraceViewerGraph: StoreNamespace {
         var selectedNodeID: String?
         var visibleMaxLane: Int
         var maxLane: Int
+        var trackRows: [TrackRow]
         var timelineSelectionIDByNodeID: [String: String]
     }
 
@@ -112,15 +143,35 @@ enum TraceViewerGraph: StoreNamespace {
 extension TraceViewerGraph {
     @MainActor
     static func store(
+        viewerData: TraceViewer.ViewerData,
+        input: Input
+    ) -> Store {
+        Store(.init(viewerData: viewerData, input: input), env: nil)
+    }
+
+    @MainActor
+    static func store(
         traceCollection: SessionTraceCollection,
         input: Input
     ) -> Store {
-        Store(.init(traceCollection: traceCollection, input: input), env: nil)
+        store(
+            viewerData: TraceViewer.makeViewerData(
+                traceSession: TraceViewer.traceSession(from: traceCollection),
+                storeVisibilityByID: [
+                    traceCollection.sessionGraph.storeInstanceID.rawValue: true
+                ]
+            ),
+            input: input
+        )
     }
 
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
         switch action {
+        case .replaceViewerData(let viewerData):
+            state.replaceViewerData(viewerData)
+            return .none
+
         case .replaceTraceCollection(let traceCollection):
             state.replaceTraceCollection(traceCollection)
             return .none

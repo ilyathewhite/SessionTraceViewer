@@ -5,9 +5,17 @@ import AppKit
 
 extension TraceViewerGraph {
     struct TimelineOverviewView: View {
+        private static let segmentLabelFontSize: CGFloat = 12
+        private static let segmentLabelHorizontalInset: CGFloat = 6
+        private static let segmentLabelWidthPadding: CGFloat = 2
+
         fileprivate struct Layout: Equatable {
+            static let contentHorizontalInset: CGFloat = 10
+            static let contentVerticalInset: CGFloat = 8
+
             let laneCount: Int
-            let columnWidth = TraceViewerGraph.OverviewMetrics.columnWidth
+            let displayLaneByLane: [Int: Int]
+            let columnWidth: CGFloat
             let laneSpacing = TraceViewerGraph.OverviewMetrics.laneSpacing
             let verticalInset = TraceViewerGraph.OverviewMetrics.verticalInset
             let nodeRadius = TraceViewerGraph.OverviewMetrics.nodeRadius
@@ -18,17 +26,33 @@ extension TraceViewerGraph {
             let selectionRingGap = TraceViewerGraph.OverviewMetrics.selectionRingGap
             let selectionRingThickness = TraceViewerGraph.OverviewMetrics.selectionRingThickness
             let mutedOpacity = TraceViewerGraph.OverviewMetrics.mutedOpacity
+            let regionTopPadding: CGFloat = 39
+            let regionBottomPadding: CGFloat = 24
+            let regionCornerRadius: CGFloat = 9
+            let regionHorizontalInset: CGFloat = 0
+            let regionShadowRadius: CGFloat = 3.5
+            let regionShadowYOffset: CGFloat = 1
+            let regionLabelHorizontalInset: CGFloat = 6
+            let regionLabelTopInset: CGFloat = 8
+            let dividerVerticalInset: CGFloat = 8
 
             var columnCenterX: CGFloat {
                 columnWidth / 2
             }
 
+            private var regionLaneGapToContentEdge: CGFloat {
+                Self.contentHorizontalInset
+            }
+
             var graphTopInset: CGFloat {
-                max(verticalInset, tooltipHeight / 2 + tooltipVerticalOffset)
+                max(
+                    regionTopPadding + regionLaneGapToContentEdge - Self.contentVerticalInset,
+                    tooltipHeight / 2 + tooltipVerticalOffset
+                )
             }
 
             var graphBottomInset: CGFloat {
-                verticalInset
+                regionBottomPadding + regionLaneGapToContentEdge - Self.contentVerticalInset
             }
 
             var graphHeight: CGFloat {
@@ -44,7 +68,8 @@ extension TraceViewerGraph {
             }
 
             func laneY(_ lane: Int) -> CGFloat {
-                graphHeight - graphBottomInset - CGFloat(max(lane, 0)) * laneSpacing
+                let displayLane = displayLaneByLane[lane] ?? max(lane, 0)
+                return graphTopInset + CGFloat(displayLane) * laneSpacing
             }
         }
 
@@ -54,16 +79,46 @@ extension TraceViewerGraph {
             let width: CGFloat
         }
 
+        fileprivate struct SegmentOverlayModel: Identifiable {
+            let segment: TraceViewerGraph.TrackSegment
+            let rect: CGRect
+            let isSelected: Bool
+
+            var id: String { segment.id }
+        }
+
         let presentation: TraceViewerGraph.Presentation
         let onSelectNode: (String) -> Void
         @State private var hoveredNodeID: String?
 
         private var layout: Layout {
-            .init(laneCount: max(presentation.visibleMaxLane + 1, 1))
+            .init(
+                laneCount: max(presentation.visibleMaxLane + 1, 1),
+                displayLaneByLane: displayLaneByLane,
+                columnWidth: resolvedColumnWidth
+            )
+        }
+
+        private var displayLaneByLane: [Int: Int] {
+            presentation.trackRows.reduce(into: [:]) { partialResult, trackRow in
+                for lane in trackRow.baseLane...trackRow.maxLane {
+                    partialResult[lane] = trackRow.baseLane + trackRow.maxLane - lane
+                }
+            }
         }
 
         private var graphWidth: CGFloat {
             CGFloat(max(presentation.columns.count, 1)) * layout.columnWidth
+        }
+
+        private var resolvedColumnWidth: CGFloat {
+            let minimumColumnWidth = TraceViewerGraph.OverviewMetrics.columnWidth
+            let labelDrivenColumnWidth = presentation.trackRows
+                .flatMap(\.segments)
+                .map(requiredColumnWidth(for:))
+                .max() ?? minimumColumnWidth
+
+            return max(minimumColumnWidth, labelDrivenColumnWidth)
         }
 
         private var selectableNodeIDSet: Set<String> {
@@ -73,6 +128,11 @@ extension TraceViewerGraph {
         private var selectedColumnID: Int? {
             guard let selectedNodeID = presentation.selectedNodeID else { return nil }
             return presentation.nodeByID[selectedNodeID]?.column
+        }
+
+        private var selectedStoreInstanceID: String? {
+            guard let selectedNodeID = presentation.selectedNodeID else { return nil }
+            return presentation.nodeByID[selectedNodeID]?.storeInstanceID
         }
 
         private var hoveredTooltip: HoveredTooltip? {
@@ -90,57 +150,105 @@ extension TraceViewerGraph {
             )
         }
 
-        var body: some View {
-            ZStack {
-                ViewerTheme.timelineGraphBackground
-
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        LazyHStack(spacing: 0) {
-                            ForEach(presentation.columns) { column in
-                                TimelineOverviewColumnView(
-                                    column: column,
-                                    layout: layout,
-                                    selectedNodeID: presentation.selectedNodeID,
-                                    selectableNodeIDSet: selectableNodeIDSet,
-                                    onSelectNode: onSelectNode,
-                                    onHoverNode: updateHoveredNode
-                                )
-                                .id(column.id)
-                            }
-                        }
-                        .overlay(alignment: .topLeading) {
-                            if let hoveredTooltip {
-                                TimelineOverviewTooltip(
-                                    text: hoveredTooltip.text,
-                                    width: hoveredTooltip.width
-                                )
-                                .position(
-                                    tooltipPosition(
-                                        for: hoveredTooltip.nodePoint,
-                                        tooltipWidth: hoveredTooltip.width
-                                    )
-                                )
-                                .allowsHitTesting(false)
-                                .zIndex(10)
-                            }
-                        }
-                    }
-                    .onHover { isHovering in
-                        if !isHovering {
-                            hoveredNodeID = nil
-                        }
-                    }
-                    .onAppear {
-                        scrollToSelected(using: proxy, animated: false)
-                    }
-                    .onChange(of: selectedColumnID) { oldValue, newValue in
-                        guard oldValue != newValue else { return }
-                        scrollToSelected(using: proxy, animated: true)
-                    }
+        private var segmentOverlayModels: [SegmentOverlayModel] {
+            presentation.trackRows.flatMap { trackRow in
+                trackRow.segments.map { segment in
+                    .init(
+                        segment: segment,
+                        rect: segmentRect(for: segment),
+                        isSelected: selectedStoreInstanceID == segment.storeInstanceID
+                    )
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: layout.graphHeight, maxHeight: layout.graphHeight)
+        }
+
+        var body: some View {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    overviewContent
+                }
+                .onHover { isHovering in
+                    if !isHovering {
+                        hoveredNodeID = nil
+                    }
+                }
+                .onAppear {
+                    scrollToSelected(using: proxy, animated: false)
+                }
+                .onChange(of: selectedColumnID) { oldValue, newValue in
+                    guard oldValue != newValue else { return }
+                    scrollToSelected(using: proxy, animated: true)
+                }
+            }
+            .frame(
+                maxWidth: .infinity,
+                minHeight: layout.graphHeight + Layout.contentVerticalInset * 2,
+                maxHeight: layout.graphHeight + Layout.contentVerticalInset * 2
+            )
+        }
+
+        private var overviewContent: some View {
+            LazyHStack(spacing: 0) {
+                ForEach(presentation.columns) { column in
+                    TimelineOverviewColumnView(
+                        column: column,
+                        layout: layout,
+                        selectedNodeID: presentation.selectedNodeID,
+                        selectableNodeIDSet: selectableNodeIDSet,
+                        onSelectNode: onSelectNode,
+                        onHoverNode: updateHoveredNode
+                    )
+                    .id(column.id)
+                }
+            }
+            .background(alignment: .topLeading) {
+                segmentRegionOverlay
+            }
+            .overlay(alignment: .topLeading) {
+                segmentLabelOverlay
+            }
+            .overlay(alignment: .topLeading) {
+                if let hoveredTooltip {
+                    TimelineOverviewTooltip(
+                        text: hoveredTooltip.text,
+                        width: hoveredTooltip.width
+                    )
+                    .position(
+                        tooltipPosition(
+                            for: hoveredTooltip.nodePoint,
+                            tooltipWidth: hoveredTooltip.width
+                        )
+                    )
+                    .allowsHitTesting(false)
+                    .zIndex(10)
+                }
+            }
+            .padding(.horizontal, Layout.contentHorizontalInset)
+            .padding(.vertical, Layout.contentVerticalInset)
+        }
+
+        private var segmentRegionOverlay: some View {
+            ZStack(alignment: .topLeading) {
+                ForEach(segmentOverlayModels) { overlay in
+                    TimelineOverviewSegmentRegionView(
+                        overlay: overlay,
+                        layout: layout
+                    )
+                }
+            }
+            .allowsHitTesting(false)
+        }
+
+        private var segmentLabelOverlay: some View {
+            ZStack(alignment: .topLeading) {
+                ForEach(segmentOverlayModels) { overlay in
+                    TimelineOverviewSegmentLabelView(
+                        overlay: overlay,
+                        layout: layout
+                    )
+                }
+            }
+            .allowsHitTesting(false)
         }
 
         private func point(for node: TraceViewerGraph.OverviewGraphNode) -> CGPoint {
@@ -150,12 +258,46 @@ extension TraceViewerGraph {
             )
         }
 
+        private func segmentRect(for segment: TraceViewerGraph.TrackSegment) -> CGRect {
+            let x = CGFloat(segment.startColumn) * layout.columnWidth + layout.regionHorizontalInset
+            let width = CGFloat(max(segment.endColumn - segment.startColumn + 1, 1)) * layout.columnWidth
+                - layout.regionHorizontalInset * 2
+            let laneTopY = min(layout.laneY(segment.baseLane), layout.laneY(segment.trackMaxLane))
+            let laneBottomY = max(layout.laneY(segment.baseLane), layout.laneY(segment.trackMaxLane))
+            let topY = laneTopY - layout.regionTopPadding
+            let bottomY = laneBottomY + layout.regionBottomPadding
+            return CGRect(
+                x: x,
+                y: topY,
+                width: width,
+                height: max(bottomY - topY, 40)
+            )
+        }
+
         private func tooltipWidth(for text: String) -> CGFloat {
             let minWidth: CGFloat = 56
             let horizontalPadding: CGFloat = 16
             let averageCharacterWidth: CGFloat = 6.2
             let estimatedTextWidth = CGFloat(text.count) * averageCharacterWidth
             return min(max(estimatedTextWidth + horizontalPadding, minWidth), layout.tooltipMaxWidth)
+        }
+
+        private func requiredColumnWidth(for segment: TraceViewerGraph.TrackSegment) -> CGFloat {
+            let columnsSpanned = CGFloat(max(segment.endColumn - segment.startColumn + 1, 1))
+            let requiredSegmentWidth = segmentLabelWidth(for: segment.storeName)
+                + Self.segmentLabelHorizontalInset * 2
+            return ceil(requiredSegmentWidth / columnsSpanned)
+        }
+
+        private func segmentLabelWidth(for title: String) -> CGFloat {
+            #if canImport(AppKit)
+            let font = NSFont.systemFont(ofSize: Self.segmentLabelFontSize, weight: .semibold)
+            let textWidth = NSString(string: title).size(withAttributes: [.font: font]).width
+            return ceil(textWidth + Self.segmentLabelWidthPadding)
+            #else
+            let averageCharacterWidth: CGFloat = 6.6
+            return ceil(CGFloat(title.count) * averageCharacterWidth + Self.segmentLabelWidthPadding)
+            #endif
         }
 
         private func tooltipPosition(
@@ -181,12 +323,114 @@ extension TraceViewerGraph {
             guard let selectedColumnID else { return }
             if animated {
                 withAnimation(.easeInOut(duration: 0.18)) {
-                    proxy.scrollTo(selectedColumnID, anchor: .center)
+                    proxy.scrollTo(selectedColumnID)
                 }
             }
             else {
-                proxy.scrollTo(selectedColumnID, anchor: .center)
+                proxy.scrollTo(selectedColumnID)
             }
+        }
+    }
+}
+
+extension TraceViewerGraph {
+    fileprivate struct TimelineOverviewSegmentRegionView: View {
+        let overlay: TimelineOverviewView.SegmentOverlayModel
+        let layout: TimelineOverviewView.Layout
+
+        private var fillColor: Color {
+            overlay.isSelected
+                ? ViewerTheme.sectionBackground
+                : Color(.sRGB, red: 249 / 255, green: 250 / 255, blue: 251 / 255)
+        }
+
+        private var strokeColor: Color {
+            overlay.isSelected ? ViewerTheme.rowStroke : ViewerTheme.sectionStroke
+        }
+
+        var body: some View {
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(
+                    cornerRadius: layout.regionCornerRadius,
+                    style: .continuous
+                )
+                .fill(fillColor)
+                .overlay {
+                    Path { path in
+                        let y = layout.laneY(overlay.segment.baseLane) - overlay.rect.minY
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: overlay.rect.width, y: y))
+                    }
+                    .stroke(
+                        ViewerTheme.overviewGuide,
+                        lineWidth: 1.15
+                    )
+                }
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: layout.regionCornerRadius,
+                        style: .continuous
+                    )
+                    .stroke(
+                        strokeColor,
+                        lineWidth: overlay.isSelected ? 1.4 : 1
+                    )
+                }
+                .shadow(
+                    color: Color.black.opacity(overlay.isSelected ? 0.08 : 0.05),
+                    radius: layout.regionShadowRadius,
+                    y: layout.regionShadowYOffset
+                )
+                .frame(width: overlay.rect.width, height: overlay.rect.height)
+                .position(x: overlay.rect.midX, y: overlay.rect.midY)
+
+                if overlay.segment.showsDivider {
+                    Path { path in
+                        let x = overlay.rect.minX
+                        path.move(
+                            to: CGPoint(
+                                x: x,
+                                y: overlay.rect.minY + layout.dividerVerticalInset
+                            )
+                        )
+                        path.addLine(
+                            to: CGPoint(
+                                x: x,
+                                y: overlay.rect.maxY - layout.dividerVerticalInset
+                            )
+                        )
+                    }
+                    .stroke(
+                        ViewerTheme.sectionStroke.opacity(0.65),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 5])
+                    )
+                }
+            }
+        }
+    }
+}
+
+extension TraceViewerGraph {
+    fileprivate struct TimelineOverviewSegmentLabelView: View {
+        let overlay: TimelineOverviewView.SegmentOverlayModel
+        let layout: TimelineOverviewView.Layout
+
+        var body: some View {
+            Text(overlay.segment.storeName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ViewerTheme.primaryText.opacity(0.82))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(
+                    width: max(overlay.rect.width - layout.regionLabelHorizontalInset * 2, 0),
+                    height: overlay.rect.height,
+                    alignment: .topLeading
+                )
+                .position(x: overlay.rect.midX, y: overlay.rect.midY)
+                .offset(
+                    x: layout.regionLabelHorizontalInset,
+                    y: layout.regionLabelTopInset
+                )
         }
     }
 }
@@ -202,8 +446,6 @@ extension TraceViewerGraph {
 
         var body: some View {
             ZStack(alignment: .topLeading) {
-                baseline
-
                 ForEach(column.edgePieces) { piece in
                     TimelineOverviewEdgePieceView(
                         piece: piece,
@@ -243,18 +485,6 @@ extension TraceViewerGraph {
             return baseColor.opacity(opacity)
         }
 
-        private var baseline: some View {
-            Path { path in
-                let y = layout.laneY(0)
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: layout.columnWidth, y: y))
-            }
-            .stroke(
-                ViewerTheme.overviewGuide,
-                lineWidth: 1.15
-            )
-            .allowsHitTesting(false)
-        }
     }
 }
 
@@ -279,9 +509,10 @@ extension TraceViewerGraph {
                 switch piece.segment {
                 case .horizontal(let lane, let startX, let endX):
                     guard endX > startX else { return }
+                    let xScale = layout.columnWidth / TraceViewerGraph.OverviewMetrics.columnWidth
                     let y = layout.laneY(lane)
-                    path.move(to: CGPoint(x: startX, y: y))
-                    path.addLine(to: CGPoint(x: endX, y: y))
+                    path.move(to: CGPoint(x: startX * xScale, y: y))
+                    path.addLine(to: CGPoint(x: endX * xScale, y: y))
 
                 case .sourceCurve(let startLane, let endLane):
                     let start = CGPoint(x: layout.columnCenterX, y: layout.laneY(startLane))

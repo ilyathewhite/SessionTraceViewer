@@ -13,7 +13,7 @@ enum LiveTrace: StoreNamespace {
 
     struct StoreEnvironment {
         let liveUpdates: @MainActor (_ port: UInt16) -> AsyncStream<LiveUpdate>
-        let syncTraceViewer: @MainActor (_ traceCollection: SessionTraceCollection) -> Void
+        let syncTraceViewer: @MainActor (_ traceSession: TraceSession) -> Void
     }
 
     enum MutatingAction {
@@ -21,7 +21,6 @@ enum LiveTrace: StoreNamespace {
         case selectSession(id: String)
         case selectPreviousSession
         case selectNextSession
-        case selectStore(id: String)
         case updateServerStatus(LiveTraceServer.Status)
         case receiveEnvelope(LiveTraceEnvelope)
     }
@@ -41,13 +40,11 @@ enum LiveTrace: StoreNamespace {
         struct Session: Identifiable {
             let id: String
             var lastUpdatedAt: Date
-            var selectedStoreID: String?
             fileprivate var accumulator: LiveTraceSessionAccumulator
 
             init(sessionID: String) {
                 self.id = sessionID
                 self.lastUpdatedAt = .now
-                self.selectedStoreID = nil
                 self.accumulator = .init(
                     title: "Live Trace",
                     sessionID: sessionID
@@ -77,14 +74,6 @@ enum LiveTrace: StoreNamespace {
                 traceSession.storeTraces
             }
 
-            var selectedStore: TraceSession.StoreTrace? {
-                traceSession.storeTrace(id: selectedStoreID)
-            }
-
-            var selectedTraceCollection: SessionTraceCollection? {
-                selectedStore?.traceCollection
-            }
-
             var completedAt: Date? {
                 let endedAtValues = storeTraces.compactMap(\.endedAt)
                 guard !storeTraces.isEmpty, endedAtValues.count == storeTraces.count else {
@@ -100,11 +89,20 @@ enum LiveTrace: StoreNamespace {
                 return "Updated \(lastUpdatedAt.formatted(date: .omitted, time: .standard))"
             }
 
-            var selectedStoreStatusText: String {
-                if let endedAt = selectedStore?.endedAt {
-                    return "Store ended \(endedAt.formatted(date: .omitted, time: .standard))"
+            var exportFilename: String {
+                let baseTitle = LiveTrace.sanitizedExportFilenameComponent(
+                    title,
+                    fallback: "TraceSession"
+                )
+                let suffix = if let startedAt {
+                    LiveTrace.exportFilenameTimestamp(startedAt)
+                } else {
+                    LiveTrace.sanitizedExportFilenameComponent(
+                        id,
+                        fallback: "session"
+                    )
                 }
-                return statusText
+                return "\(baseTitle)-\(suffix)"
             }
 
             var startedAtText: String? {
@@ -113,33 +111,9 @@ enum LiveTrace: StoreNamespace {
                 }
             }
 
-            func storeSummaryText(for storeTrace: TraceSession.StoreTrace) -> String {
-                var parts = [
-                    "\(storeTrace.traceCollection.sessionGraph.nodes.count) nodes",
-                    "\(storeTrace.traceCollection.sessionGraph.edges.count) edges"
-                ]
-                if let endedAt = storeTrace.endedAt {
-                    parts.append("Ended \(endedAt.formatted(date: .omitted, time: .standard))")
-                }
-                return parts.joined(separator: " • ")
-            }
-
             mutating func apply(_ envelope: LiveTraceEnvelope) {
                 accumulator.apply(envelope)
                 lastUpdatedAt = accumulator.lastUpdatedAt
-                normalizeSelectedStore()
-            }
-
-            mutating func selectStore(id: String) {
-                guard storeTraces.contains(where: { $0.id == id }) else { return }
-                selectedStoreID = id
-            }
-
-            private mutating func normalizeSelectedStore() {
-                if selectedStoreID == nil ||
-                    !storeTraces.contains(where: { $0.id == selectedStoreID }) {
-                    selectedStoreID = storeTraces.first?.id
-                }
             }
         }
 
@@ -169,10 +143,6 @@ enum LiveTrace: StoreNamespace {
             return sessionsByID[selectedSessionID]
         }
 
-        var selectedTraceCollection: SessionTraceCollection? {
-            selectedSession?.selectedTraceCollection
-        }
-
         mutating func selectSession(id: String) {
             guard sessionsByID[id] != nil else { return }
             selectedSessionID = id
@@ -198,15 +168,6 @@ enum LiveTrace: StoreNamespace {
             self.selectedSessionID = sessions[nextIndex].id
         }
 
-        mutating func selectStore(id: String) {
-            guard let selectedSessionID,
-                  var session = sessionsByID[selectedSessionID] else {
-                return
-            }
-            session.selectStore(id: id)
-            sessionsByID[selectedSessionID] = session
-        }
-
         mutating func updateServerStatus(_ status: LiveTraceServer.Status) {
             serverStatus = status
         }
@@ -225,7 +186,7 @@ enum LiveTrace: StoreNamespace {
         }
     }
 }
-
+    
 extension LiveTrace {
     private static let listenEffectKey = "live-trace-listener"
 
@@ -260,14 +221,6 @@ extension LiveTrace {
             guard state.selectedSessionID != previousSelectedSessionID else { return .none }
             return .action(.effect(.syncSelectedTraceViewer))
 
-        case .selectStore(let id):
-            let previousSelectedStoreID = state.selectedSession?.selectedStore?.id
-            state.selectStore(id: id)
-            guard state.selectedSession?.selectedStore?.id != previousSelectedStoreID else {
-                return .none
-            }
-            return .action(.effect(.syncSelectedTraceViewer))
-
         case .updateServerStatus(let status):
             state.updateServerStatus(status)
             return .none
@@ -275,9 +228,6 @@ extension LiveTrace {
         case .receiveEnvelope(let envelope):
             state.receiveEnvelope(envelope)
             guard state.selectedSessionID == envelope.sessionID else { return .none }
-            guard state.selectedSession?.selectedStore?.id == envelope.storeInstanceID else {
-                return .none
-            }
             return .action(.effect(.syncSelectedTraceViewer))
         }
     }
@@ -292,7 +242,7 @@ extension LiveTrace {
         case .startListening:
             let port = state.port
             return .asyncActionSequenceLatest(key: listenEffectKey) { send in
-                if state.selectedTraceCollection != nil {
+                if state.selectedSession != nil {
                     send(.effect(.syncSelectedTraceViewer))
                 }
 
@@ -307,14 +257,38 @@ extension LiveTrace {
             }
 
         case .syncSelectedTraceViewer:
-            guard let traceCollection = state.selectedTraceCollection else { return .none }
-            env.syncTraceViewer(traceCollection)
+            guard let traceSession = state.selectedSession?.traceSession else { return .none }
+            env.syncTraceViewer(traceSession)
             return .none
         }
     }
 }
 
 extension LiveTrace {
+    fileprivate static func exportFilenameTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd_HHmmss"
+        return formatter.string(from: date)
+    }
+
+    fileprivate static func sanitizedExportFilenameComponent(
+        _ value: String?,
+        fallback: String
+    ) -> String {
+        guard let value = normalized(value) else { return fallback }
+        let invalidCharacters = CharacterSet(charactersIn: "/:\\?%*|\"<>")
+        let sanitized = value.components(separatedBy: invalidCharacters).joined(separator: "-")
+        let collapsedWhitespace = sanitized
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return collapsedWhitespace.isEmpty ? fallback : collapsedWhitespace
+    }
+
     fileprivate static func sessionSubtitleLines(
         session: TraceSession,
         fallback: String

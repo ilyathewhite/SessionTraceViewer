@@ -10,6 +10,320 @@ extension ModelTests {
 
 extension ModelTests.TraceViewerModelTests {
     @Test
+    func testCombinedViewerMergesVisibleStoreItemsChronologically() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+        let items = state.viewerData.orderedIDs.compactMap { state.viewerData.itemsByID[$0] }
+
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertEqual(
+            Set(items.map(\.displayStoreName)),
+            Set(["Alpha Store", "Beta Store", "Gamma Store"])
+        )
+
+        for (lhs, rhs) in zip(items, items.dropFirst()) {
+            switch (lhs.date, rhs.date) {
+            case let (lhsDate?, rhsDate?):
+                XCTAssertLessThanOrEqual(lhsDate, rhsDate)
+            case (.some, nil):
+                XCTFail("Expected merged combined-view items to keep dated events ahead of undated ones.")
+            default:
+                break
+            }
+        }
+    }
+
+    @Test
+    func testStoreLayersAreOrderedByStartedAt() async throws {
+        let traceSession = TraceSession(
+            sessionID: "started-at-ordering",
+            title: "Started At Ordering",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "gamma.s3",
+                    storeName: "Gamma Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 140),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                ),
+                .init(
+                    storeInstanceID: "alpha.s1",
+                    storeName: "Alpha Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                ),
+                .init(
+                    storeInstanceID: "beta.s2",
+                    storeName: "Beta Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 105),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+
+        XCTAssertEqual(
+            state.storeLayers.map(\.displayName),
+            ["Alpha Store", "Beta Store", "Gamma Store"]
+        )
+    }
+
+    @Test
+    func testHidingSelectedStoreMovesSelectionToNextVisibleEvent() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        var listState = TraceViewerList.StoreState(viewerData: traceViewerState.viewerData)
+        let alphaStoreID = traceSession.storeTraces[0].id
+
+        guard let alphaEventID = listState.visibleItems.first(where: { $0.storeInstanceID == alphaStoreID })?.id else {
+            XCTFail("Expected a visible Alpha Store event in the combined viewer.")
+            return
+        }
+
+        _ = TraceViewerList.reduce(&listState, .selectEvent(id: alphaEventID, shouldFocus: false))
+        traceViewerState.toggleStoreVisibility(id: alphaStoreID)
+        _ = TraceViewerList.reduce(&listState, .replaceViewerData(traceViewerState.viewerData))
+
+        XCTAssertEqual(listState.selectedID, traceViewerState.viewerData.orderedIDs.first)
+        XCTAssertFalse(
+            listState.visibleItems.contains(where: { $0.storeInstanceID == alphaStoreID })
+        )
+    }
+
+    @Test
+    func testUnhidingStorePreservesSelectionForStillVisibleItem() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        var listState = TraceViewerList.StoreState(viewerData: traceViewerState.viewerData)
+        let alphaStoreID = traceSession.storeTraces[0].id
+        let betaStoreID = traceSession.storeTraces[1].id
+        let gammaStoreID = traceSession.storeTraces[2].id
+
+        traceViewerState.setStoreVisibility(id: alphaStoreID, isVisible: false)
+        traceViewerState.setStoreVisibility(id: betaStoreID, isVisible: false)
+        _ = TraceViewerList.reduce(&listState, .replaceViewerData(traceViewerState.viewerData))
+
+        guard let gammaEventID = listState.visibleItems.first(where: { $0.storeInstanceID == gammaStoreID })?.id else {
+            XCTFail("Expected a visible Gamma Store event after hiding the other stores.")
+            return
+        }
+
+        _ = TraceViewerList.reduce(&listState, .selectEvent(id: gammaEventID, shouldFocus: false))
+
+        guard let selectedBeforeUnhide = listState.selectedItem else {
+            XCTFail("Expected a selected item before unhiding Alpha Store.")
+            return
+        }
+
+        traceViewerState.setStoreVisibility(id: alphaStoreID, isVisible: true)
+        _ = TraceViewerList.reduce(&listState, .replaceViewerData(traceViewerState.viewerData))
+
+        guard let selectedAfterUnhide = listState.selectedItem else {
+            XCTFail("Expected selection to remain after unhiding Alpha Store.")
+            return
+        }
+
+        XCTAssertEqual(selectedAfterUnhide.storeInstanceID, selectedBeforeUnhide.storeInstanceID)
+        XCTAssertEqual(selectedAfterUnhide.localNodeID, selectedBeforeUnhide.localNodeID)
+        XCTAssertEqual(
+            selectedAfterUnhide.id,
+            TraceViewer.scopedTimelineID(
+                storeInstanceID: selectedBeforeUnhide.storeInstanceID,
+                localNodeID: selectedBeforeUnhide.localNodeID
+            )
+        )
+    }
+
+    @Test
+    func testSetStoreVisibilityIsIdempotent() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var state = TraceViewer.StoreState(traceSession: traceSession)
+        let alphaStoreID = traceSession.storeTraces[0].id
+
+        _ = TraceViewer.reduce(
+            &state,
+            .setStoreVisibility(id: alphaStoreID, isVisible: false)
+        )
+
+        let hiddenOrderedIDs = state.viewerData.orderedIDs
+        let hiddenContentVersion = state.contentVersion
+
+        _ = TraceViewer.reduce(
+            &state,
+            .setStoreVisibility(id: alphaStoreID, isVisible: false)
+        )
+
+        XCTAssertEqual(state.viewerData.orderedIDs, hiddenOrderedIDs)
+        XCTAssertEqual(state.contentVersion, hiddenContentVersion)
+        XCTAssertEqual(
+            state.storeLayers.first(where: { $0.id == alphaStoreID })?.isVisible,
+            false
+        )
+    }
+
+    @Test
+    func testViewerDataBindingAppliesFirstVisibilityChangeImmediately() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        let traceViewerStore = TraceViewer.store(traceSession: traceSession)
+        let listStore = TraceViewerList.store(viewerData: traceViewerStore.state.viewerData)
+        listStore.environment = .init(
+            resetTimelineListFocus: {},
+            scrollTimelineListToID: { _ in }
+        )
+        let alphaStoreID = traceSession.storeTraces[0].id
+        listStore.bind(to: traceViewerStore, on: \.viewerData) {
+            .mutating(.replaceViewerData($0))
+        }
+
+        traceViewerStore.send(
+            .mutating(
+                .setStoreVisibility(id: alphaStoreID, isVisible: false)
+            )
+        )
+        try await waitUntil {
+            !listStore.state.visibleItems.contains(where: { $0.storeInstanceID == alphaStoreID })
+        }
+
+        XCTAssertFalse(
+            listStore.state.visibleItems.contains(where: { $0.storeInstanceID == alphaStoreID })
+        )
+
+        traceViewerStore.send(
+            .mutating(
+                .setStoreVisibility(id: alphaStoreID, isVisible: true)
+            )
+        )
+        try await waitUntil {
+            listStore.state.visibleItems.contains(where: { $0.storeInstanceID == alphaStoreID })
+        }
+
+        XCTAssertTrue(
+            listStore.state.visibleItems.contains(where: { $0.storeInstanceID == alphaStoreID })
+        )
+    }
+
+    @Test
+    func testCombinedGraphKeepsTrackAssignmentStableAcrossVisibilityChanges() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let alphaStoreID = traceSession.storeTraces[0].id
+        let betaStoreID = traceSession.storeTraces[1].id
+        let gammaStoreID = traceSession.storeTraces[2].id
+
+        let initialGraphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        XCTAssertEqual(
+            initialGraphState.presentation.trackRows.map { $0.segments.map(\.storeInstanceID) },
+            [
+                [alphaStoreID, gammaStoreID],
+                [betaStoreID]
+            ]
+        )
+        XCTAssertTrue(initialGraphState.presentation.trackRows[0].segments[1].showsDivider)
+
+        traceViewerState.toggleStoreVisibility(id: alphaStoreID)
+        let hiddenGraphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        XCTAssertEqual(
+            hiddenGraphState.presentation.trackRows.map { $0.segments.map(\.storeInstanceID) },
+            [
+                [gammaStoreID],
+                [betaStoreID]
+            ]
+        )
+        XCTAssertFalse(hiddenGraphState.presentation.trackRows[0].segments[0].showsDivider)
+        XCTAssertFalse(hiddenGraphState.presentation.trackRows[1].segments[0].showsDivider)
+    }
+
+    @Test
+    func testCombinedGraphUsesSharedTrackHeightForAllSegmentsInTrack() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let graphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        for trackRow in graphState.presentation.trackRows where !trackRow.segments.isEmpty {
+            XCTAssertEqual(
+                trackRow.segments.map(\.trackMaxLane),
+                Array(repeating: trackRow.maxLane, count: trackRow.segments.count)
+            )
+        }
+    }
+
+    @Test
+    func testActiveStoreSegmentExtendsToCurrentSessionEnd() async throws {
+        let originalTraceSession = try await makeCombinedTraceSessionForTests()
+        let alphaStoreTrace = originalTraceSession.storeTraces[0]
+        let alphaStoreID = alphaStoreTrace.id
+        let traceSession = TraceSession(
+            sessionID: originalTraceSession.sessionID,
+            title: originalTraceSession.title,
+            hostName: originalTraceSession.hostName,
+            processName: originalTraceSession.processName,
+            startedAt: originalTraceSession.startedAt,
+            storeTraces: [
+                .init(
+                    storeInstanceID: alphaStoreTrace.storeInstanceID,
+                    storeName: alphaStoreTrace.storeName,
+                    hostName: alphaStoreTrace.hostName,
+                    processName: alphaStoreTrace.processName,
+                    startedAt: alphaStoreTrace.startedAt,
+                    endedAt: nil,
+                    traceCollection: alphaStoreTrace.traceCollection
+                )
+            ] + originalTraceSession.storeTraces.dropFirst()
+        )
+
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let graphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        guard let alphaSegment = graphState.presentation.trackRows
+            .flatMap(\.segments)
+            .first(where: { $0.storeInstanceID == alphaStoreID }) else {
+            XCTFail("Expected Alpha Store segment in combined graph.")
+            return
+        }
+
+        let alphaVisibleIndices = traceViewerState.viewerData.orderedIDs.enumerated().compactMap { index, id in
+            traceViewerState.viewerData.itemsByID[id]?.storeInstanceID == alphaStoreID ? index : nil
+        }
+
+        guard let alphaLastEventColumn = alphaVisibleIndices.max() else {
+            XCTFail("Expected Alpha Store events in combined timeline.")
+            return
+        }
+
+        let sessionEndColumn = graphState.presentation.columns.count - 1
+
+        XCTAssertGreaterThan(
+            sessionEndColumn,
+            alphaLastEventColumn,
+            "Test fixture must keep later session activity after Alpha Store's last event."
+        )
+        XCTAssertEqual(alphaSegment.endColumn, sessionEndColumn)
+    }
+
+    @Test
     func testOverviewGraphKeepsStateNodesOnMainLane() async throws {
         let state = try await makeStateFromGeneratedTrace()
 
@@ -992,4 +1306,21 @@ extension ModelTests.TraceViewerModelTests {
         }
     }
 
+    private func waitUntil(
+        timeout: Duration = .seconds(1),
+        condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+
+        while clock.now < deadline {
+            if condition() {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let didSatisfyCondition = condition()
+        XCTAssertTrue(didSatisfyCondition, "Timed out waiting for expected condition.")
+    }
 }

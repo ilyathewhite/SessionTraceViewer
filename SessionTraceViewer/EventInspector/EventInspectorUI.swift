@@ -54,9 +54,6 @@ extension EventInspector: StoreUINamespace {
                                 valueCard(rows: valueRows)
                             }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.top, 10)
-                        .padding(.bottom, 10)
                     }
                 }
                 else {
@@ -68,6 +65,10 @@ extension EventInspector: StoreUINamespace {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .padding(.top, 10)
+            .padding(.bottom, 10)
+            .padding(.leading, 0)
+            .padding(.trailing, 10)
             .connectOnAppear {
                 store.environment = .init(
                     syncInlineDiff: Nsp.syncInlineDiff(store: store),
@@ -191,7 +192,7 @@ extension EventInspector: StoreUINamespace {
             .padding(10)
             .background(cardBackground)
             .overlay(cardBorder)
-            .shadow(color: ViewerTheme.rowLiftShadow, radius: 1.4, x: 0, y: 1)
+            .shadow(color: ViewerTheme.detailCardShadow, radius: 1.4, x: 0, y: 1)
         }
 
         private var cardBackground: some View {

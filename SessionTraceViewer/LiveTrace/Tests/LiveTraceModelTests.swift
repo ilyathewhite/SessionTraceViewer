@@ -11,7 +11,7 @@ extension ModelTests {
 
 extension ModelTests.LiveTraceModelTests {
     @Test
-    func testLiveTraceReceiveHelloCreatesSessionAndSelectsItsStore() {
+    func testLiveTraceReceiveHelloCreatesSessionAndSelectsIt() {
         var state = LiveTrace.StoreState(port: 41234)
         let startedAt = Date(timeIntervalSince1970: 100)
         let metadata = makeMetadata(
@@ -32,8 +32,8 @@ extension ModelTests.LiveTraceModelTests {
         XCTAssertEqual(state.selectedSession?.subtitleLines, ["1 store", "Trace Host", "MacBook Pro"])
         XCTAssertEqual(state.selectedSession?.startedAt, startedAt)
         XCTAssertEqual(state.selectedSession?.storeTraces.map(\.id), [metadata.storeInstanceID])
-        XCTAssertEqual(state.selectedSession?.selectedStore?.id, metadata.storeInstanceID)
-        XCTAssertEqual(state.selectedSession?.selectedStore?.displayName, metadata.storeName)
+        XCTAssertEqual(state.selectedSession?.storeTraces.first?.id, metadata.storeInstanceID)
+        XCTAssertEqual(state.selectedSession?.storeTraces.first?.displayName, metadata.storeName)
         XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
     }
 
@@ -73,8 +73,7 @@ extension ModelTests.LiveTraceModelTests {
 
         XCTAssertEqual(state.sessions.map(\.id), ["session-z"])
         XCTAssertEqual(state.selectedSession?.storeTraces.map(\.id), ["counter.s1", "timer.s2"])
-        XCTAssertEqual(state.selectedSession?.selectedStore?.id, "counter.s1")
-        XCTAssertFalse(syncsSelectedLiveTraceViewer(in: effect))
+        XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
     }
 
     @Test
@@ -206,43 +205,6 @@ extension ModelTests.LiveTraceModelTests {
     }
 
     @Test
-    func testSelectingStoreSyncsSelectedTraceViewer() {
-        var state = LiveTrace.StoreState()
-
-        _ = LiveTrace.reduce(
-            &state,
-            .receiveEnvelope(
-                .hello(
-                    makeMetadata(
-                        sessionID: "session-z",
-                        storeInstanceID: "counter.s1",
-                        title: "Example App",
-                        storeName: "CounterStore"
-                    )
-                )
-            )
-        )
-        _ = LiveTrace.reduce(
-            &state,
-            .receiveEnvelope(
-                .hello(
-                    makeMetadata(
-                        sessionID: "session-z",
-                        storeInstanceID: "timer.s2",
-                        title: "Example App",
-                        storeName: "TimerStore"
-                    )
-                )
-            )
-        )
-
-        let effect = LiveTrace.reduce(&state, .selectStore(id: "timer.s2"))
-
-        XCTAssertEqual(state.selectedSession?.selectedStore?.id, "timer.s2")
-        XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
-    }
-
-    @Test
     func testLiveTraceDoesNotSyncTraceViewerForUnselectedSessionUpdate() {
         var state = LiveTrace.StoreState()
 
@@ -301,7 +263,7 @@ extension ModelTests.LiveTraceModelTests {
     }
 
     @Test
-    func testLiveTraceDoesNotSyncTraceViewerForUnselectedStoreUpdate() {
+    func testLiveTraceSyncsTraceViewerForSelectedSessionStoreUpdate() {
         var state = LiveTrace.StoreState()
 
         _ = LiveTrace.reduce(
@@ -345,12 +307,15 @@ extension ModelTests.LiveTraceModelTests {
             )
         )
 
-        XCTAssertEqual(state.selectedSession?.selectedStore?.id, "counter.s1")
-        XCTAssertFalse(syncsSelectedLiveTraceViewer(in: effect))
+        XCTAssertEqual(
+            state.selectedSession?.storeTraces.first(where: { $0.id == "timer.s2" })?.displayName,
+            "TimerStore"
+        )
+        XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
     }
 
     @Test
-    func testLiveTraceMarksSelectedStoreAsEndedWhenMetadataUpdates() {
+    func testLiveTraceMarksStoreAsEndedWhenMetadataUpdates() {
         var state = LiveTrace.StoreState()
         let startedAt = Date(timeIntervalSince1970: 100)
         let endedAt = Date(timeIntervalSince1970: 140)
@@ -386,11 +351,42 @@ extension ModelTests.LiveTraceModelTests {
             )
         )
 
-        XCTAssertEqual(state.selectedSession?.selectedStore?.endedAt, endedAt)
-        XCTAssertTrue(state.selectedSession?.selectedStore?.isEnded == true)
+        XCTAssertEqual(
+            state.selectedSession?.storeTraces.first(where: { $0.id == "counter.s1" })?.endedAt,
+            endedAt
+        )
+        XCTAssertTrue(
+            state.selectedSession?.storeTraces.first(where: { $0.id == "counter.s1" })?.isEnded == true
+        )
+        XCTAssertEqual(state.selectedSession?.completedAt, endedAt)
         XCTAssertTrue(state.selectedSession?.statusText.hasPrefix("Completed") ?? false)
-        XCTAssertTrue(state.selectedSession?.selectedStoreStatusText.hasPrefix("Store ended") ?? false)
         XCTAssertTrue(syncsSelectedLiveTraceViewer(in: effect))
+    }
+
+    @Test
+    func testLiveTraceSessionExportFilenameUsesSessionMetadata() {
+        var state = LiveTrace.StoreState()
+        let startedAt = Date(timeIntervalSince1970: 100)
+
+        _ = LiveTrace.reduce(
+            &state,
+            .receiveEnvelope(
+                .hello(
+                    makeMetadata(
+                        sessionID: "session-z",
+                        storeInstanceID: "counter.s1",
+                        title: "Example / App",
+                        storeName: "CounterStore",
+                        startedAt: startedAt
+                    )
+                )
+            )
+        )
+
+        XCTAssertEqual(
+            state.selectedSession?.exportFilename,
+            "Example - App-1970-01-01_000140"
+        )
     }
 
     private func makeMetadata(

@@ -39,6 +39,12 @@ extension TraceViewer {
                     .background(
                         Capsule(style: .continuous)
                             .fill(resolvedFillColor)
+                            .shadow(
+                                color: ViewerTheme.traceViewerScopeCapsuleShadow,
+                                radius: 1.2,
+                                x: 0,
+                                y: 0.8
+                            )
                     )
                     .overlay(
                         Capsule(style: .continuous)
@@ -46,6 +52,8 @@ extension TraceViewer {
                     )
             }
             .buttonStyle(.plain)
+            .focusable(false)
+            .focusEffectDisabled()
         }
     }
 }

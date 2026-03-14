@@ -14,7 +14,10 @@ enum TraceViewer: StoreNamespace {
     typealias EffectAction = Never
 
     enum MutatingAction {
+        case replaceTraceSession(TraceSession)
         case replaceTraceCollection(SessionTraceCollection)
+        case setStoreVisibility(id: String, isVisible: Bool)
+        case toggleStoreVisibility(id: String)
     }
 
     enum EventKind: String, Equatable, Hashable {
@@ -43,6 +46,9 @@ enum TraceViewer: StoreNamespace {
         private static let subtitleSeparator = " • "
 
         let id: String
+        let localNodeID: String
+        let storeInstanceID: String
+        let storeName: String
         let order: Int
         let kind: EventKind
         let colorKind: EventColorKind
@@ -54,6 +60,10 @@ enum TraceViewer: StoreNamespace {
 
         var timeLabel: String {
             EventInspectorFormatter.timestamp(date)
+        }
+
+        var displayStoreName: String {
+            storeName
         }
 
         var subtitleSourceLabel: String? {
@@ -78,24 +88,64 @@ enum TraceViewer: StoreNamespace {
         }
     }
 
+    struct StoreLayer: Identifiable, Equatable {
+        let id: String
+        let displayName: String
+        let isVisible: Bool
+    }
+
+    struct ViewerData: Equatable {
+        let traceSession: TraceSession
+        let visibleStoreTraces: [TraceSession.StoreTrace]
+        let primaryTraceCollection: SessionTraceCollection
+        let orderedIDs: [String]
+        let itemsByID: [String: TimelineItem]
+        let childrenByParentID: [String: [String]]
+        let descendantCountByID: [String: Int]
+        let overviewGraphNodes: [TraceViewerGraph.OverviewGraphNode]
+        let overviewGraphNodeByID: [String: TraceViewerGraph.OverviewGraphNode]
+        let overviewGraphIDByTimelineID: [String: String]
+        let overviewGraphMaxLane: Int
+        let overviewGraphTooltipTextByID: [String: String]
+        let graphTrackRows: [TraceViewerGraph.TrackRow]
+    }
+
     struct StoreState {
-        var traceCollection: SessionTraceCollection
-        var traceCollectionVersion = 0
+        var traceSession: TraceSession
+        var storeVisibilityByID: [String: Bool]
+        var viewerData: ViewerData
+        var contentVersion = 0
     }
 }
 
 extension TraceViewer {
     @MainActor
+    static func store(traceSession: TraceSession) -> Store {
+        Store(.init(traceSession: traceSession), env: nil)
+    }
+
+    @MainActor
     static func store(traceCollection: SessionTraceCollection) -> Store {
-        Store(.init(traceCollection: traceCollection), env: nil)
+        store(traceSession: traceSession(from: traceCollection))
     }
 
     @MainActor
     static func reduce(_ state: inout StoreState, _ action: MutatingAction) -> Store.SyncEffect {
         switch action {
+        case .replaceTraceSession(let traceSession):
+            state.replaceTraceSession(traceSession)
+            return .none
+
         case .replaceTraceCollection(let traceCollection):
-            state.traceCollection = traceCollection
-            state.traceCollectionVersion += 1
+            state.replaceTraceSession(traceSession(from: traceCollection))
+            return .none
+
+        case .setStoreVisibility(let id, let isVisible):
+            state.setStoreVisibility(id: id, isVisible: isVisible)
+            return .none
+
+        case .toggleStoreVisibility(let id):
+            state.toggleStoreVisibility(id: id)
             return .none
         }
     }
