@@ -41,40 +41,72 @@ enum LiveTrace: StoreNamespace {
             let id: String
             var lastUpdatedAt: Date
             fileprivate var accumulator: LiveTraceSessionAccumulator
+            private(set) var traceSession: TraceSession
+            private(set) var title: String
+            private(set) var subtitleLines: [String]
+            private(set) var startedAt: Date?
+            private(set) var storeTraces: [TraceSession.StoreTrace]
+            private(set) var completedAt: Date?
+            private(set) var statusText: String
+            private(set) var exportFilename: String
+            private(set) var startedAtText: String?
 
             init(sessionID: String) {
-                self.id = sessionID
-                self.lastUpdatedAt = .now
-                self.accumulator = .init(
+                let accumulator = LiveTraceSessionAccumulator(
                     title: "Live Trace",
                     sessionID: sessionID
                 )
+                self.id = sessionID
+                self.lastUpdatedAt = .now
+                self.accumulator = accumulator
+                self.traceSession = accumulator.session
+                self.title = accumulator.session.title
+                self.subtitleLines = LiveTrace.sessionSubtitleLines(
+                    session: accumulator.session,
+                    fallback: sessionID
+                )
+                self.startedAt = accumulator.session.startedAt
+                self.storeTraces = accumulator.session.storeTraces
+                self.completedAt = nil
+                self.statusText = ""
+                self.exportFilename = ""
+                self.startedAtText = nil
+                refreshDerivedDisplayValues()
             }
 
-            var traceSession: TraceSession {
-                accumulator.session
+            mutating func apply(_ envelope: LiveTraceEnvelope) {
+                accumulator.apply(envelope)
+                lastUpdatedAt = accumulator.lastUpdatedAt
+                refreshDerivedDisplayValues()
             }
 
-            var title: String {
-                traceSession.title
-            }
-
-            var subtitleLines: [String] {
-                LiveTrace.sessionSubtitleLines(
+            private mutating func refreshDerivedDisplayValues() {
+                traceSession = accumulator.session
+                title = traceSession.title
+                subtitleLines = LiveTrace.sessionSubtitleLines(
                     session: traceSession,
                     fallback: id
                 )
+                startedAt = traceSession.startedAt
+                storeTraces = traceSession.storeTraces
+                completedAt = Self.completedAt(for: storeTraces)
+                statusText = Self.statusText(
+                    completedAt: completedAt,
+                    lastUpdatedAt: lastUpdatedAt
+                )
+                exportFilename = Self.exportFilename(
+                    title: title,
+                    startedAt: startedAt,
+                    sessionID: id
+                )
+                startedAtText = startedAt.map {
+                    "Started \($0.formatted(date: .abbreviated, time: .standard))"
+                }
             }
 
-            var startedAt: Date? {
-                traceSession.startedAt
-            }
-
-            var storeTraces: [TraceSession.StoreTrace] {
-                traceSession.storeTraces
-            }
-
-            var completedAt: Date? {
+            private static func completedAt(
+                for storeTraces: [TraceSession.StoreTrace]
+            ) -> Date? {
                 let endedAtValues = storeTraces.compactMap(\.endedAt)
                 guard !storeTraces.isEmpty, endedAtValues.count == storeTraces.count else {
                     return nil
@@ -82,14 +114,21 @@ enum LiveTrace: StoreNamespace {
                 return endedAtValues.max()
             }
 
-            var statusText: String {
+            private static func statusText(
+                completedAt: Date?,
+                lastUpdatedAt: Date
+            ) -> String {
                 if let completedAt {
                     return "Completed \(completedAt.formatted(date: .omitted, time: .standard))"
                 }
                 return "Updated \(lastUpdatedAt.formatted(date: .omitted, time: .standard))"
             }
 
-            var exportFilename: String {
+            private static func exportFilename(
+                title: String,
+                startedAt: Date?,
+                sessionID: String
+            ) -> String {
                 let baseTitle = LiveTrace.sanitizedExportFilenameComponent(
                     title,
                     fallback: "TraceSession"
@@ -98,22 +137,11 @@ enum LiveTrace: StoreNamespace {
                     LiveTrace.exportFilenameTimestamp(startedAt)
                 } else {
                     LiveTrace.sanitizedExportFilenameComponent(
-                        id,
+                        sessionID,
                         fallback: "session"
                     )
                 }
                 return "\(baseTitle)-\(suffix)"
-            }
-
-            var startedAtText: String? {
-                startedAt.map {
-                    "Started \($0.formatted(date: .abbreviated, time: .standard))"
-                }
-            }
-
-            mutating func apply(_ envelope: LiveTraceEnvelope) {
-                accumulator.apply(envelope)
-                lastUpdatedAt = accumulator.lastUpdatedAt
             }
         }
 
@@ -122,42 +150,35 @@ enum LiveTrace: StoreNamespace {
         var selectedSessionID: String?
         var serverStatus: LiveTraceServer.Status
         private(set) var sessionsByID: [String: Session]
+        private(set) var sessions: [Session]
+        private(set) var selectedSession: Session?
 
         init(port: UInt16 = LiveTraceDefaults.defaultPort) {
             self.port = port
             self.serverStatus = .starting(port)
             self.sessionsByID = [:]
-        }
-
-        var sessions: [Session] {
-            sessionsByID.values.sorted { lhs, rhs in
-                if lhs.lastUpdatedAt == rhs.lastUpdatedAt {
-                    return lhs.id < rhs.id
-                }
-                return lhs.lastUpdatedAt > rhs.lastUpdatedAt
-            }
-        }
-
-        var selectedSession: Session? {
-            guard let selectedSessionID else { return nil }
-            return sessionsByID[selectedSessionID]
+            self.sessions = []
+            self.selectedSession = nil
         }
 
         mutating func selectSession(id: String) {
             guard sessionsByID[id] != nil else { return }
             selectedSessionID = id
+            refreshSelectedSession()
         }
 
         mutating func selectRelativeSession(offset: Int) {
             let sessions = sessions
             guard !sessions.isEmpty else {
                 selectedSessionID = nil
+                refreshSelectedSession()
                 return
             }
 
             guard let selectedSessionID,
                   let currentIndex = sessions.firstIndex(where: { $0.id == selectedSessionID }) else {
                 self.selectedSessionID = sessions.first?.id
+                refreshSelectedSession()
                 return
             }
 
@@ -166,6 +187,7 @@ enum LiveTrace: StoreNamespace {
                 sessions.count - 1
             )
             self.selectedSessionID = sessions[nextIndex].id
+            refreshSelectedSession()
         }
 
         mutating func updateServerStatus(_ status: LiveTraceServer.Status) {
@@ -176,6 +198,7 @@ enum LiveTrace: StoreNamespace {
             var session = sessionsByID[envelope.sessionID] ?? .init(sessionID: envelope.sessionID)
             session.apply(envelope)
             sessionsByID[session.id] = session
+            refreshSessions()
             normalizeSelectedSession()
         }
 
@@ -183,6 +206,24 @@ enum LiveTrace: StoreNamespace {
             if selectedSessionID == nil || sessionsByID[selectedSessionID ?? ""] == nil {
                 selectedSessionID = sessions.first?.id
             }
+            refreshSelectedSession()
+        }
+
+        private mutating func refreshSessions() {
+            sessions = sessionsByID.values.sorted { lhs, rhs in
+                if lhs.lastUpdatedAt == rhs.lastUpdatedAt {
+                    return lhs.id < rhs.id
+                }
+                return lhs.lastUpdatedAt > rhs.lastUpdatedAt
+            }
+        }
+
+        private mutating func refreshSelectedSession() {
+            guard let selectedSessionID else {
+                selectedSession = nil
+                return
+            }
+            selectedSession = sessionsByID[selectedSessionID]
         }
     }
 }

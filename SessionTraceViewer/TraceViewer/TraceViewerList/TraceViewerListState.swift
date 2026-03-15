@@ -18,6 +18,64 @@ extension TraceViewerList.StoreState {
         ]
     }
 
+    private static func parentIDByChildID(
+        from childrenByParentID: [String: [String]]
+    ) -> [String: String] {
+        var parentIDByChildID: [String: String] = [:]
+        for (parentID, childIDs) in childrenByParentID {
+            for childID in childIDs where parentIDByChildID[childID] == nil {
+                parentIDByChildID[childID] = parentID
+            }
+        }
+        return parentIDByChildID
+    }
+
+    private static func descendantIDsByID(
+        orderedIDs: [String],
+        childrenByParentID: [String: [String]]
+    ) -> [String: Set<String>] {
+        var descendantIDsByID: [String: Set<String>] = [:]
+
+        func descendantIDs(for id: String) -> Set<String> {
+            if let cached = descendantIDsByID[id] {
+                return cached
+            }
+
+            var collectedDescendantIDs: Set<String> = []
+            for childID in childrenByParentID[id] ?? [] {
+                collectedDescendantIDs.insert(childID)
+                collectedDescendantIDs.formUnion(descendantIDs(for: childID))
+            }
+            descendantIDsByID[id] = collectedDescendantIDs
+            return collectedDescendantIDs
+        }
+
+        for id in orderedIDs {
+            _ = descendantIDs(for: id)
+        }
+
+        return descendantIDsByID
+    }
+
+    private static func ancestorIDsByID(
+        orderedIDs: [String],
+        parentIDByChildID: [String: String]
+    ) -> [String: Set<String>] {
+        var ancestorIDsByID: [String: Set<String>] = [:]
+
+        for id in orderedIDs {
+            var ancestors: Set<String> = []
+            var cursor = id
+            while let parentID = parentIDByChildID[cursor] {
+                if !ancestors.insert(parentID).inserted { break }
+                cursor = parentID
+            }
+            ancestorIDsByID[id] = ancestors
+        }
+
+        return ancestorIDsByID
+    }
+
     init(traceCollection: SessionTraceCollection) {
         self.init(
             viewerData: TraceViewer.makeViewerData(
@@ -30,18 +88,50 @@ extension TraceViewerList.StoreState {
     }
 
     init(viewerData: TraceViewer.ViewerData) {
+        let orderedIDSet = Set(viewerData.orderedIDs)
+        let indexByID = Dictionary(
+            uniqueKeysWithValues: viewerData.orderedIDs.enumerated().map { ($1, $0) }
+        )
+        let parentIDByChildID = Self.parentIDByChildID(from: viewerData.childrenByParentID)
+        let descendantIDsByID = Self.descendantIDsByID(
+            orderedIDs: viewerData.orderedIDs,
+            childrenByParentID: viewerData.childrenByParentID
+        )
+        let ancestorIDsByID = Self.ancestorIDsByID(
+            orderedIDs: viewerData.orderedIDs,
+            parentIDByChildID: parentIDByChildID
+        )
+        let itemIDByIdentity = Dictionary(
+            uniqueKeysWithValues: viewerData.itemsByID.values.map { item in
+                (
+                    ItemIdentity(
+                        storeInstanceID: item.storeInstanceID,
+                        localNodeID: item.localNodeID
+                    ),
+                    item.id
+                )
+            }
+        )
+
         self.traceCollection = viewerData.primaryTraceCollection
         self.visibleStoreCount = viewerData.visibleStoreTraces.count
         self.orderedIDs = viewerData.orderedIDs
+        self.orderedIDSet = orderedIDSet
+        self.indexByID = indexByID
         self.itemsByID = viewerData.itemsByID
+        self.itemIDByIdentity = itemIDByIdentity
         self.childrenByParentID = viewerData.childrenByParentID
+        self.descendantIDsByID = descendantIDsByID
+        self.ancestorIDsByID = ancestorIDsByID
         self.descendantCountByID = viewerData.descendantCountByID
         self.scopeFilter = .all
         self.collapsedIDs = []
         self.selectedID = viewerData.orderedIDs.first
         self.visibleIDs = []
+        self.visibleIndexByID = [:]
         self.visibleItems = []
         self.selectableVisibleIDs = []
+        self.selectableVisibleIndexByID = [:]
         self.selectableVisibleIDSet = []
         self.graphInput = .init(
             visibleTimelineIDs: [],
@@ -109,32 +199,11 @@ extension TraceViewerList.StoreState {
     }
 
     func descendants(of id: String) -> Set<String> {
-        var result: Set<String> = []
-        var stack: [String] = childrenByParentID[id] ?? []
-
-        while let next = stack.popLast() {
-            if result.insert(next).inserted {
-                stack.append(contentsOf: childrenByParentID[next] ?? [])
-            }
-        }
-        return result
+        descendantIDsByID[id] ?? []
     }
 
     func ancestors(of id: String) -> Set<String> {
-        var parentByChild: [String: String] = [:]
-        for (parent, children) in childrenByParentID {
-            for child in children where parentByChild[child] == nil {
-                parentByChild[child] = parent
-            }
-        }
-
-        var ancestors: Set<String> = []
-        var cursor = id
-        while let parent = parentByChild[cursor] {
-            if !ancestors.insert(parent).inserted { break }
-            cursor = parent
-        }
-        return ancestors
+        ancestorIDsByID[id] ?? []
     }
 
     mutating func clampSelection(
@@ -157,7 +226,7 @@ extension TraceViewerList.StoreState {
             return
         }
 
-        if let selectedID, selectableVisibleIDs.contains(selectedID) {
+        if let selectedID, selectableVisibleIDSet.contains(selectedID) {
             return
         }
 
@@ -166,10 +235,10 @@ extension TraceViewerList.StoreState {
             return
         }
 
-        let selectableVisibleIDSet = Set(selectableVisibleIDs)
+        let selectableVisibleIDSet = self.selectableVisibleIDSet
         let anchorID = anchorID ?? selectedID
         if let anchorID,
-           let anchorIndex = visibleIDs.firstIndex(of: anchorID) {
+           let anchorIndex = visibleIndexByID[anchorID] {
             for candidateIndex in anchorIndex..<visibleIDs.count {
                 let candidateID = visibleIDs[candidateIndex]
                 if selectableVisibleIDSet.contains(candidateID) {
@@ -254,7 +323,7 @@ extension TraceViewerList.StoreState {
         }
 
         guard let selectedID,
-              let currentIndex = selectableVisibleIDs.firstIndex(of: selectedID) else {
+              let currentIndex = selectableVisibleIndexByID[selectedID] else {
             self.selectedID = selectableVisibleIDs.first
             refreshSelectionDerivedData()
             return
@@ -295,7 +364,7 @@ extension TraceViewerList.StoreState {
 
         self = .init(viewerData: viewerData)
         scopeFilter = previousScopeFilter
-        collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
+        collapsedIDs = previousCollapsedIDs.intersection(orderedIDSet)
         refreshVisibilityDerivedData()
         if let previousSelectedID,
            itemsByID[previousSelectedID] != nil {
@@ -339,10 +408,10 @@ extension TraceViewerList.StoreState {
     }
 
     func selectionID(matching previousSelectedItem: TraceViewer.TimelineItem) -> String? {
-        itemsByID.values.first { candidate in
-            candidate.storeInstanceID == previousSelectedItem.storeInstanceID
-                && candidate.localNodeID == previousSelectedItem.localNodeID
-        }?.id
+        itemIDByIdentity[.init(
+            storeInstanceID: previousSelectedItem.storeInstanceID,
+            localNodeID: previousSelectedItem.localNodeID
+        )]
     }
 
     static func compareSelectionPosition(
@@ -388,11 +457,21 @@ extension TraceViewerList.StoreState {
     private mutating func refreshVisibilityDerivedData() {
         var hiddenIDs: Set<String> = []
         var nextVisibleIDs: [String] = []
+        var nextVisibleItems: [TraceViewer.TimelineItem] = []
+        var nextSelectableVisibleIDs: [String] = []
         nextVisibleIDs.reserveCapacity(orderedIDs.count)
+        nextVisibleItems.reserveCapacity(orderedIDs.count)
+        nextSelectableVisibleIDs.reserveCapacity(orderedIDs.count)
 
         for id in orderedIDs {
             guard !hiddenIDs.contains(id) else { continue }
             nextVisibleIDs.append(id)
+            if let item = itemsByID[id] {
+                nextVisibleItems.append(item)
+                if matchesScopeFilter(item) {
+                    nextSelectableVisibleIDs.append(id)
+                }
+            }
 
             if collapsedIDs.contains(id) {
                 hiddenIDs.formUnion(descendants(of: id))
@@ -400,11 +479,14 @@ extension TraceViewerList.StoreState {
         }
 
         visibleIDs = nextVisibleIDs
-        visibleItems = nextVisibleIDs.compactMap { itemsByID[$0] }
-        selectableVisibleIDs = nextVisibleIDs.filter { id in
-            guard let item = itemsByID[id] else { return false }
-            return matchesScopeFilter(item)
-        }
+        visibleIndexByID = Dictionary(
+            uniqueKeysWithValues: nextVisibleIDs.enumerated().map { ($1, $0) }
+        )
+        visibleItems = nextVisibleItems
+        selectableVisibleIDs = nextSelectableVisibleIDs
+        selectableVisibleIndexByID = Dictionary(
+            uniqueKeysWithValues: selectableVisibleIDs.enumerated().map { ($1, $0) }
+        )
         selectableVisibleIDSet = Set(selectableVisibleIDs)
     }
 
@@ -429,7 +511,7 @@ extension TraceViewerList.StoreState {
         guard let selectedID,
               let selectedItem,
               case .state = selectedItem.node,
-              let selectedIndex = orderedIDs.firstIndex(of: selectedID),
+              let selectedIndex = indexByID[selectedID],
               selectedIndex > 0 else {
             return nil
         }

@@ -15,6 +15,26 @@ extension TraceViewer {
         let itemsByID: [String: TimelineItem]
         let childrenByParentID: [String: [String]]
         let descendantCountByID: [String: Int]
+        let firstDatedEventAt: Date?
+        let lastDatedEventAt: Date?
+
+        init(
+            traceCollection: SessionTraceCollection,
+            orderedIDs: [String],
+            itemsByID: [String: TimelineItem],
+            childrenByParentID: [String: [String]],
+            descendantCountByID: [String: Int]
+        ) {
+            self.traceCollection = traceCollection
+            self.orderedIDs = orderedIDs
+            self.itemsByID = itemsByID
+            self.childrenByParentID = childrenByParentID
+            self.descendantCountByID = descendantCountByID
+
+            let eventDates = orderedIDs.compactMap { itemsByID[$0]?.date }
+            self.firstDatedEventAt = eventDates.min()
+            self.lastDatedEventAt = eventDates.max()
+        }
     }
 }
 

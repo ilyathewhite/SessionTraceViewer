@@ -61,25 +61,16 @@ extension TraceViewerGraph.StoreState {
         self.overviewGraphTooltipTextByID = viewerData.overviewGraphTooltipTextByID
         self.input = input
         self.presentation = presentation
+        self.visibleOverviewGraphNodes = []
+        self.selectableVisibleOverviewGraphNodeIDs = []
+        self.selectedOverviewGraphNodeID = nil
+        refreshDerivedState()
     }
 
-    var visibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
-        visibleOverviewGraphNodes(for: input.visibleTimelineIDs)
-    }
-
-    var selectableVisibleOverviewGraphNodes: [TraceViewerGraph.OverviewGraphNode] {
-        selectableVisibleOverviewGraphNodes(
-            from: visibleOverviewGraphNodes,
-            selectableTimelineIDs: input.selectableTimelineIDs
-        )
-    }
-
-    var selectableVisibleOverviewGraphNodeIDs: [String] {
-        selectableVisibleOverviewGraphNodes.map(\.id)
-    }
-
-    var selectedOverviewGraphNodeID: String? {
-        selectedOverviewGraphNodeID(for: input.selectedTimelineID)
+    private mutating func refreshDerivedState() {
+        visibleOverviewGraphNodes = presentation.visibleNodes
+        selectableVisibleOverviewGraphNodeIDs = presentation.selectableNodeIDs
+        selectedOverviewGraphNodeID = presentation.selectedNodeID
     }
 
     mutating func updateInput(_ input: TraceViewerGraph.Input) {
@@ -88,19 +79,29 @@ extension TraceViewerGraph.StoreState {
 
         if previousInput.visibleTimelineIDs != input.visibleTimelineIDs {
             presentation = makePresentation(for: input)
+            refreshDerivedState()
             return
         }
 
         if previousInput.selectableTimelineIDs != input.selectableTimelineIDs {
-            let visibleNodes = visibleOverviewGraphNodes(for: input.visibleTimelineIDs)
-            presentation.selectableNodeIDs = selectableVisibleOverviewGraphNodeIDs(
-                from: visibleNodes,
+            let selectableNodeIDs = selectableVisibleOverviewGraphNodeIDs(
+                from: presentation.visibleNodes,
                 selectableTimelineIDs: input.selectableTimelineIDs
             )
+            selectableVisibleOverviewGraphNodeIDs = selectableNodeIDs
+            presentation.selectableNodeIDs = selectableNodeIDs
+            presentation.selectableNodeIDSet = Set(selectableNodeIDs)
         }
 
         if previousInput.selectedTimelineID != input.selectedTimelineID {
-            presentation.selectedNodeID = selectedOverviewGraphNodeID(for: input.selectedTimelineID)
+            selectedOverviewGraphNodeID = selectedOverviewGraphNodeID(for: input.selectedTimelineID)
+            presentation.selectedNodeID = selectedOverviewGraphNodeID
+            presentation.selectedColumnID = selectedOverviewGraphNodeID.flatMap {
+                presentation.nodeByID[$0]?.column
+            }
+            presentation.selectedStoreInstanceID = selectedOverviewGraphNodeID.flatMap {
+                presentation.nodeByID[$0]?.storeInstanceID
+            }
         }
     }
 
@@ -131,7 +132,14 @@ extension TraceViewerGraph.StoreState {
         }
 
         input.selectedTimelineID = timelineID
-        presentation.selectedNodeID = selectedOverviewGraphNodeID(for: timelineID)
+        selectedOverviewGraphNodeID = selectedOverviewGraphNodeID(for: timelineID)
+        presentation.selectedNodeID = selectedOverviewGraphNodeID
+        presentation.selectedColumnID = selectedOverviewGraphNodeID.flatMap {
+            presentation.nodeByID[$0]?.column
+        }
+        presentation.selectedStoreInstanceID = selectedOverviewGraphNodeID.flatMap {
+            presentation.nodeByID[$0]?.storeInstanceID
+        }
         return .init(
             timelineID: timelineID,
             shouldFocusTimelineList: shouldFocusTimelineList
@@ -174,38 +182,18 @@ extension TraceViewerGraph.StoreState {
         )
     }
 
-    private func visibleOverviewGraphNodes(
-        for visibleTimelineIDs: [String]
-    ) -> [TraceViewerGraph.OverviewGraphNode] {
-        let visibleTimelineIDSet = Set(visibleTimelineIDs)
-        return overviewGraphNodes.filter { node in
-            guard let timelineID = node.timelineID else {
-                return true
-            }
-            return visibleTimelineIDSet.contains(timelineID)
-        }
-    }
-
-    private func selectableVisibleOverviewGraphNodes(
-        from visibleNodes: [TraceViewerGraph.OverviewGraphNode],
-        selectableTimelineIDs: [String]
-    ) -> [TraceViewerGraph.OverviewGraphNode] {
-        let selectableVisibleIDSet = Set(selectableTimelineIDs)
-        return visibleNodes.filter { node in
-            guard let selectionTimelineID = node.selectionTimelineID else { return false }
-            return selectableVisibleIDSet.contains(selectionTimelineID)
-        }
-    }
-
     private func selectableVisibleOverviewGraphNodeIDs(
         from visibleNodes: [TraceViewerGraph.OverviewGraphNode],
         selectableTimelineIDs: [String]
     ) -> [String] {
-        selectableVisibleOverviewGraphNodes(
-            from: visibleNodes,
-            selectableTimelineIDs: selectableTimelineIDs
-        )
-        .map(\.id)
+        let selectableVisibleIDSet = Set(selectableTimelineIDs)
+        return visibleNodes.compactMap { node in
+            guard let selectionTimelineID = node.selectionTimelineID,
+                  selectableVisibleIDSet.contains(selectionTimelineID) else {
+                return nil
+            }
+            return node.id
+        }
     }
 
     private func selectedOverviewGraphNodeID(for selectedTimelineID: String?) -> String? {
@@ -280,7 +268,11 @@ extension TraceViewerGraph {
                                 baseLane: 0,
                                 maxLane: overviewGraphPresentation.maxLane,
                                 trackMaxLane: overviewGraphPresentation.maxLane,
-                                showsDivider: false
+                                showsDivider: false,
+                                requiredColumnWidth: TraceViewerGraph.requiredColumnWidth(
+                                    forStoreName: firstStoreTrace.displayName,
+                                    columnsSpanned: maxColumn + 1
+                                )
                             )
                         ]
                     )
@@ -314,13 +306,12 @@ extension TraceViewerGraph {
                 itemsByID: timelineData.itemsByID,
                 parentByChildID: makeParentByChildID(from: storeTrace.traceCollection.sessionGraph.edges)
             )
-            let dates = timelineData.orderedIDs.compactMap { timelineData.itemsByID[$0]?.date }
             return .init(
                 storeTrace: storeTrace,
                 timelineData: timelineData,
                 commitGraphLayout: commitGraphLayout,
-                firstDate: dates.min(),
-                lastDate: dates.max()
+                firstDate: timelineData.firstDatedEventAt,
+                lastDate: timelineData.lastDatedEventAt
             )
         }
 
@@ -431,7 +422,11 @@ extension TraceViewerGraph {
                     baseLane: baseLane,
                     maxLane: baseLane + layout.commitGraphLayout.maxLane,
                     trackMaxLane: trackMaxLane,
-                    showsDivider: index > 0
+                    showsDivider: index > 0,
+                    requiredColumnWidth: TraceViewerGraph.requiredColumnWidth(
+                        forStoreName: layout.storeTrace.displayName,
+                        columnsSpanned: max(endColumn - startColumn + 1, 1)
+                    )
                 )
             }
 
@@ -1162,26 +1157,43 @@ extension TraceViewerGraph {
             return visibleTimelineIDSet.contains(timelineID)
         }
         let selectableTimelineIDSet = Set(input.selectableTimelineIDs)
+        let nodeByID = Dictionary(uniqueKeysWithValues: visibleNodes.map { ($0.id, $0) })
+        let selectableNodeIDs: [String] = visibleNodes.compactMap { node -> String? in
+            guard let selectionTimelineID = node.selectionTimelineID,
+                  selectableTimelineIDSet.contains(selectionTimelineID) else {
+                return nil
+            }
+            return node.id
+        }
+        let selectedNodeID = input.selectedTimelineID.flatMap { overviewGraphIDByTimelineID[$0] }
+        let selectedNode = selectedNodeID.flatMap { nodeByID[$0] }
         let visibleMaxLane = visibleNodes.map(\.lane).max() ?? overviewGraphMaxLane
 
         return .init(
+            visibleNodes: visibleNodes,
             columns: buildOverviewColumns(
                 nodes: visibleNodes,
                 minimumColumnCount: maxTrackEndColumn(trackRows: trackRows) + 1
             ),
-            nodeByID: Dictionary(uniqueKeysWithValues: visibleNodes.map { ($0.id, $0) }),
-            selectableNodeIDs: visibleNodes.compactMap { node in
-                guard let selectionTimelineID = node.selectionTimelineID,
-                      selectableTimelineIDSet.contains(selectionTimelineID) else {
-                    return nil
-                }
-                return node.id
-            },
+            nodeByID: nodeByID,
+            selectableNodeIDs: selectableNodeIDs,
+            selectableNodeIDSet: Set(selectableNodeIDs),
             tooltipTextByNodeID: tooltipTextByNodeID,
-            selectedNodeID: input.selectedTimelineID.flatMap { overviewGraphIDByTimelineID[$0] },
+            tooltipWidthByNodeID: tooltipTextByNodeID.mapValues { text in
+                TraceViewerGraph.tooltipWidth(for: text)
+            },
+            selectedNodeID: selectedNodeID,
+            selectedColumnID: selectedNode?.column,
+            selectedStoreInstanceID: selectedNode?.storeInstanceID,
             visibleMaxLane: visibleMaxLane,
             maxLane: overviewGraphMaxLane,
             trackRows: trackRows,
+            displayLaneByLane: displayLaneByLane(trackRows: trackRows),
+            columnWidth: max(
+                TraceViewerGraph.OverviewMetrics.columnWidth,
+                trackRows.flatMap(\.segments).map(\.requiredColumnWidth).max()
+                    ?? TraceViewerGraph.OverviewMetrics.columnWidth
+            ),
             timelineSelectionIDByNodeID: Dictionary(
                 uniqueKeysWithValues: visibleNodes.compactMap { node in
                     guard let selectionTimelineID = node.selectionTimelineID else { return nil }

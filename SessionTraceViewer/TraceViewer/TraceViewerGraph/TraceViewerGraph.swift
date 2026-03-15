@@ -7,6 +7,9 @@
 
 import Foundation
 import ReducerArchitecture
+#if canImport(AppKit)
+import AppKit
+#endif
 
 enum TraceViewerGraph: StoreNamespace {
     enum OverviewMetrics {
@@ -87,6 +90,7 @@ enum TraceViewerGraph: StoreNamespace {
         let maxLane: Int
         let trackMaxLane: Int
         let showsDivider: Bool
+        let requiredColumnWidth: CGFloat
     }
 
     struct TrackRow: Identifiable, Equatable {
@@ -117,14 +121,21 @@ enum TraceViewerGraph: StoreNamespace {
     }
 
     struct Presentation: Equatable {
+        var visibleNodes: [OverviewGraphNode]
         var columns: [OverviewColumn]
         var nodeByID: [String: OverviewGraphNode]
         var selectableNodeIDs: [String]
+        var selectableNodeIDSet: Set<String>
         var tooltipTextByNodeID: [String: String]
+        var tooltipWidthByNodeID: [String: CGFloat]
         var selectedNodeID: String?
+        var selectedColumnID: Int?
+        var selectedStoreInstanceID: String?
         var visibleMaxLane: Int
         var maxLane: Int
         var trackRows: [TrackRow]
+        var displayLaneByLane: [Int: Int]
+        var columnWidth: CGFloat
         var timelineSelectionIDByNodeID: [String: String]
     }
 
@@ -138,6 +149,56 @@ enum TraceViewerGraph: StoreNamespace {
 
         var input: Input
         var presentation: Presentation
+        var visibleOverviewGraphNodes: [OverviewGraphNode]
+        var selectableVisibleOverviewGraphNodeIDs: [String]
+        var selectedOverviewGraphNodeID: String?
+    }
+}
+
+extension TraceViewerGraph {
+    fileprivate static let segmentLabelFontSize: CGFloat = 12
+    fileprivate static let segmentLabelWidthPadding: CGFloat = 2
+    fileprivate static let segmentLabelHorizontalInset: CGFloat = 6
+
+    static func tooltipWidth(for text: String) -> CGFloat {
+        let minWidth: CGFloat = 56
+        let horizontalPadding: CGFloat = 16
+        let averageCharacterWidth: CGFloat = 6.2
+        let estimatedTextWidth = CGFloat(text.count) * averageCharacterWidth
+        return min(
+            max(estimatedTextWidth + horizontalPadding, minWidth),
+            OverviewMetrics.tooltipMaxWidth
+        )
+    }
+
+    static func segmentLabelWidth(for title: String) -> CGFloat {
+        #if canImport(AppKit)
+        let font = NSFont.systemFont(ofSize: segmentLabelFontSize, weight: .semibold)
+        let textWidth = NSString(string: title).size(withAttributes: [.font: font]).width
+        return ceil(textWidth + segmentLabelWidthPadding)
+        #else
+        let averageCharacterWidth: CGFloat = 6.6
+        return ceil(CGFloat(title.count) * averageCharacterWidth + segmentLabelWidthPadding)
+        #endif
+    }
+
+    static func requiredColumnWidth(
+        forStoreName storeName: String,
+        columnsSpanned: Int
+    ) -> CGFloat {
+        let requiredSegmentWidth = segmentLabelWidth(for: storeName)
+            + segmentLabelHorizontalInset * 2
+        return ceil(requiredSegmentWidth / CGFloat(max(columnsSpanned, 1)))
+    }
+
+    static func displayLaneByLane(
+        trackRows: [TrackRow]
+    ) -> [Int: Int] {
+        trackRows.reduce(into: [:]) { partialResult, trackRow in
+            for lane in trackRow.baseLane...trackRow.maxLane {
+                partialResult[lane] = trackRow.baseLane + trackRow.maxLane - lane
+            }
+        }
     }
 }
 

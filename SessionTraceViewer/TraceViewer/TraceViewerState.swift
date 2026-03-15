@@ -143,11 +143,8 @@ extension TraceViewer.StoreState {
                 return "Active"
             }
 
-            let eventDates = timelineData?.orderedIDs.compactMap { timelineID in
-                timelineData?.itemsByID[timelineID]?.date
-            } ?? []
-            let startedAt = storeTrace.startedAt ?? eventDates.min()
-            let endedAt = storeTrace.endedAt ?? eventDates.max()
+            let startedAt = storeTrace.startedAt ?? timelineData?.firstDatedEventAt
+            let endedAt = storeTrace.endedAt ?? timelineData?.lastDatedEventAt
 
             guard let startedAt,
                   let endedAt else {

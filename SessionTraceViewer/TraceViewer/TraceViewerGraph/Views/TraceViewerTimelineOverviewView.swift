@@ -1,14 +1,7 @@
 import SwiftUI
-#if canImport(AppKit)
-import AppKit
-#endif
 
 extension TraceViewerGraph {
     struct TimelineOverviewView: View {
-        private static let segmentLabelFontSize: CGFloat = 12
-        private static let segmentLabelHorizontalInset: CGFloat = 6
-        private static let segmentLabelWidthPadding: CGFloat = 2
-
         fileprivate struct Layout: Equatable {
             static let contentHorizontalInset: CGFloat = 10
             static let contentVerticalInset: CGFloat = 8
@@ -94,51 +87,20 @@ extension TraceViewerGraph {
         private var layout: Layout {
             .init(
                 laneCount: max(presentation.visibleMaxLane + 1, 1),
-                displayLaneByLane: displayLaneByLane,
-                columnWidth: resolvedColumnWidth
+                displayLaneByLane: presentation.displayLaneByLane,
+                columnWidth: presentation.columnWidth
             )
-        }
-
-        private var displayLaneByLane: [Int: Int] {
-            presentation.trackRows.reduce(into: [:]) { partialResult, trackRow in
-                for lane in trackRow.baseLane...trackRow.maxLane {
-                    partialResult[lane] = trackRow.baseLane + trackRow.maxLane - lane
-                }
-            }
         }
 
         private var graphWidth: CGFloat {
             CGFloat(max(presentation.columns.count, 1)) * layout.columnWidth
         }
 
-        private var resolvedColumnWidth: CGFloat {
-            let minimumColumnWidth = TraceViewerGraph.OverviewMetrics.columnWidth
-            let labelDrivenColumnWidth = presentation.trackRows
-                .flatMap(\.segments)
-                .map(requiredColumnWidth(for:))
-                .max() ?? minimumColumnWidth
-
-            return max(minimumColumnWidth, labelDrivenColumnWidth)
-        }
-
-        private var selectableNodeIDSet: Set<String> {
-            Set(presentation.selectableNodeIDs)
-        }
-
-        private var selectedColumnID: Int? {
-            guard let selectedNodeID = presentation.selectedNodeID else { return nil }
-            return presentation.nodeByID[selectedNodeID]?.column
-        }
-
-        private var selectedStoreInstanceID: String? {
-            guard let selectedNodeID = presentation.selectedNodeID else { return nil }
-            return presentation.nodeByID[selectedNodeID]?.storeInstanceID
-        }
-
         private var hoveredTooltip: HoveredTooltip? {
             guard let hoveredNodeID,
                   let node = presentation.nodeByID[hoveredNodeID],
                   let text = presentation.tooltipTextByNodeID[hoveredNodeID],
+                  let width = presentation.tooltipWidthByNodeID[hoveredNodeID],
                   !text.isEmpty else {
                 return nil
             }
@@ -146,7 +108,7 @@ extension TraceViewerGraph {
             return .init(
                 text: text,
                 nodePoint: point(for: node),
-                width: tooltipWidth(for: text)
+                width: width
             )
         }
 
@@ -156,7 +118,7 @@ extension TraceViewerGraph {
                     .init(
                         segment: segment,
                         rect: segmentRect(for: segment, contentWidth: contentWidth),
-                        isSelected: selectedStoreInstanceID == segment.storeInstanceID
+                        isSelected: presentation.selectedStoreInstanceID == segment.storeInstanceID
                     )
                 }
             }
@@ -181,7 +143,7 @@ extension TraceViewerGraph {
                     .onAppear {
                         scrollToSelected(using: proxy, animated: false)
                     }
-                    .onChange(of: selectedColumnID) { oldValue, newValue in
+                    .onChange(of: presentation.selectedColumnID) { oldValue, newValue in
                         guard oldValue != newValue else { return }
                         scrollToSelected(using: proxy, animated: true)
                     }
@@ -203,7 +165,7 @@ extension TraceViewerGraph {
                         column: column,
                         layout: layout,
                         selectedNodeID: presentation.selectedNodeID,
-                        selectableNodeIDSet: selectableNodeIDSet,
+                        selectableNodeIDSet: presentation.selectableNodeIDSet,
                         onSelectNode: onSelectNode,
                         onHoverNode: updateHoveredNode
                     )
@@ -295,32 +257,6 @@ extension TraceViewerGraph {
             )
         }
 
-        private func tooltipWidth(for text: String) -> CGFloat {
-            let minWidth: CGFloat = 56
-            let horizontalPadding: CGFloat = 16
-            let averageCharacterWidth: CGFloat = 6.2
-            let estimatedTextWidth = CGFloat(text.count) * averageCharacterWidth
-            return min(max(estimatedTextWidth + horizontalPadding, minWidth), layout.tooltipMaxWidth)
-        }
-
-        private func requiredColumnWidth(for segment: TraceViewerGraph.TrackSegment) -> CGFloat {
-            let columnsSpanned = CGFloat(max(segment.endColumn - segment.startColumn + 1, 1))
-            let requiredSegmentWidth = segmentLabelWidth(for: segment.storeName)
-                + Self.segmentLabelHorizontalInset * 2
-            return ceil(requiredSegmentWidth / columnsSpanned)
-        }
-
-        private func segmentLabelWidth(for title: String) -> CGFloat {
-            #if canImport(AppKit)
-            let font = NSFont.systemFont(ofSize: Self.segmentLabelFontSize, weight: .semibold)
-            let textWidth = NSString(string: title).size(withAttributes: [.font: font]).width
-            return ceil(textWidth + Self.segmentLabelWidthPadding)
-            #else
-            let averageCharacterWidth: CGFloat = 6.6
-            return ceil(CGFloat(title.count) * averageCharacterWidth + Self.segmentLabelWidthPadding)
-            #endif
-        }
-
         private func tooltipPosition(
             for nodePoint: CGPoint,
             tooltipWidth: CGFloat
@@ -341,7 +277,7 @@ extension TraceViewerGraph {
         }
 
         private func scrollToSelected(using proxy: ScrollViewProxy, animated: Bool) {
-            guard let selectedColumnID else { return }
+            guard let selectedColumnID = presentation.selectedColumnID else { return }
             if animated {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     proxy.scrollTo(selectedColumnID)

@@ -41,6 +41,11 @@ enum TraceViewerList: StoreNamespace {
     }
 
     struct StoreState {
+        struct ItemIdentity: Hashable {
+            let storeInstanceID: String
+            let localNodeID: String
+        }
+
         struct CustomScopeSelection: Equatable {
             var eventKinds: Set<TraceViewer.EventKind> = []
             var includesUserEvents = false
@@ -54,16 +59,23 @@ enum TraceViewerList: StoreNamespace {
         let traceCollection: SessionTraceCollection
         let visibleStoreCount: Int
         let orderedIDs: [String]
+        let orderedIDSet: Set<String>
+        let indexByID: [String: Int]
         let itemsByID: [String: TraceViewer.TimelineItem]
+        let itemIDByIdentity: [ItemIdentity: String]
         let childrenByParentID: [String: [String]]
+        let descendantIDsByID: [String: Set<String>]
+        let ancestorIDsByID: [String: Set<String>]
         let descendantCountByID: [String: Int]
 
         var scopeFilter: ScopeFilter
         var collapsedIDs: Set<String>
         var selectedID: String?
         var visibleIDs: [String]
+        var visibleIndexByID: [String: Int]
         var visibleItems: [TraceViewer.TimelineItem]
         var selectableVisibleIDs: [String]
+        var selectableVisibleIndexByID: [String: Int]
         var selectableVisibleIDSet: Set<String>
         var graphInput: TraceViewerGraph.Input
         var selectedItem: TraceViewer.TimelineItem?

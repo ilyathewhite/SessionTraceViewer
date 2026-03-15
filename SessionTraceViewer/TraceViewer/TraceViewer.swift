@@ -58,34 +58,64 @@ enum TraceViewer: StoreNamespace {
         let date: Date?
         let childIDs: [String]
         let node: SessionGraph.Node
+        let timeLabel: String
+        let displayStoreName: String
+        let subtitleSourceLabel: String?
+        let subtitleDetailLabel: String?
+        let isUserSourceEvent: Bool
 
-        var timeLabel: String {
-            EventInspectorFormatter.timestamp(date)
+        init(
+            id: String,
+            localNodeID: String,
+            storeInstanceID: String,
+            storeName: String,
+            order: Int,
+            kind: EventKind,
+            colorKind: EventColorKind,
+            title: String,
+            subtitle: String,
+            date: Date?,
+            childIDs: [String],
+            node: SessionGraph.Node
+        ) {
+            self.id = id
+            self.localNodeID = localNodeID
+            self.storeInstanceID = storeInstanceID
+            self.storeName = storeName
+            self.order = order
+            self.kind = kind
+            self.colorKind = colorKind
+            self.title = title
+            self.subtitle = subtitle
+            self.date = date
+            self.childIDs = childIDs
+            self.node = node
+            self.timeLabel = EventInspectorFormatter.timestamp(date)
+            self.displayStoreName = storeName
+
+            let subtitleComponents = Self.subtitleComponents(from: subtitle)
+            self.subtitleSourceLabel = subtitleComponents.sourceLabel
+            self.subtitleDetailLabel = subtitleComponents.detailLabel
+            self.isUserSourceEvent = subtitleComponents.isUserSource
         }
 
-        var displayStoreName: String {
-            storeName
-        }
-
-        var subtitleSourceLabel: String? {
-            guard let range = subtitle.range(of: Self.subtitleSeparator) else { return nil }
-            let prefix = String(subtitle[..<range.lowerBound])
-            switch prefix.uppercased() {
-            case "USER", "CODE":
-                return prefix.uppercased()
-            default:
-                return nil
+        private static func subtitleComponents(
+            from subtitle: String
+        ) -> (sourceLabel: String?, detailLabel: String?, isUserSource: Bool) {
+            guard let range = subtitle.range(of: subtitleSeparator) else {
+                return (nil, nil, false)
             }
-        }
 
-        var subtitleDetailLabel: String? {
-            guard subtitleSourceLabel != nil,
-                  let range = subtitle.range(of: Self.subtitleSeparator) else { return nil }
-            return String(subtitle[range.upperBound...])
-        }
+            let prefix = String(subtitle[..<range.lowerBound]).uppercased()
+            guard prefix == "USER" || prefix == "CODE" else {
+                return (nil, nil, false)
+            }
 
-        var isUserSourceEvent: Bool {
-            subtitleSourceLabel == "USER"
+            return (
+                prefix,
+                String(subtitle[range.upperBound...]),
+                prefix == "USER"
+            )
         }
     }
 
@@ -97,12 +127,39 @@ enum TraceViewer: StoreNamespace {
         let statusText: String?
         let eventCount: Int
         let children: [StoreLayer]
+        let eventCountText: String
+        let metadataText: String
+
+        init(
+            id: String,
+            displayName: String,
+            isVisible: Bool,
+            childKeyLineText: String?,
+            statusText: String?,
+            eventCount: Int,
+            children: [StoreLayer]
+        ) {
+            self.id = id
+            self.displayName = displayName
+            self.isVisible = isVisible
+            self.childKeyLineText = childKeyLineText
+            self.statusText = statusText
+            self.eventCount = eventCount
+            self.children = children
+
+            let eventCountText = Self.eventCountText(for: eventCount)
+            self.eventCountText = eventCountText
+            self.metadataText = Self.metadataText(
+                statusText: statusText,
+                eventCountText: eventCountText
+            )
+        }
 
         var outlineChildren: [StoreLayer]? {
             children.isEmpty ? nil : children
         }
 
-        var eventCountText: String {
+        private static func eventCountText(for eventCount: Int) -> String {
             switch eventCount {
             case 0:
                 return "no events"
@@ -113,7 +170,10 @@ enum TraceViewer: StoreNamespace {
             }
         }
 
-        var metadataText: String {
+        private static func metadataText(
+            statusText: String?,
+            eventCountText: String
+        ) -> String {
             [statusText, eventCountText]
                 .compactMap { text in
                     guard let text, !text.isEmpty else { return nil }
