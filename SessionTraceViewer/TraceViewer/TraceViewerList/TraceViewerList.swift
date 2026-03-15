@@ -85,6 +85,17 @@ enum TraceViewerList: StoreNamespace {
 }
 
 extension TraceViewerList {
+    @MainActor
+    static func store() -> Store {
+        Store(
+            .init(),
+            env: .init(
+                resetTimelineListFocus: {},
+                scrollTimelineListToID: { _ in }
+            )
+        )
+    }
+
     private static func followUpEffect(
         shouldResetTimelineListFocus: Bool,
         previousSelectedID: String?,

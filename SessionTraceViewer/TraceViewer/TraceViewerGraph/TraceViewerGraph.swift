@@ -35,6 +35,12 @@ enum TraceViewerGraph: StoreNamespace {
         var visibleTimelineIDs: [String]
         var selectableTimelineIDs: [String]
         var selectedTimelineID: String?
+
+        static let empty = Self(
+            visibleTimelineIDs: [],
+            selectableTimelineIDs: [],
+            selectedTimelineID: nil
+        )
     }
 
     struct OverviewGraphNode: Identifiable, Equatable {
@@ -203,6 +209,11 @@ extension TraceViewerGraph {
 }
 
 extension TraceViewerGraph {
+    @MainActor
+    static func store() -> Store {
+        Store(.init(), env: nil)
+    }
+
     @MainActor
     static func store(
         viewerData: TraceViewer.ViewerData,

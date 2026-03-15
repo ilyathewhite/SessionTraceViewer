@@ -245,6 +245,31 @@ extension TraceViewer.TimelineData {
 }
 
 extension TraceViewer {
+    static func emptyViewerData() -> ViewerData {
+        .init(
+            traceSession: .init(
+                sessionID: "trace-viewer.empty.session",
+                title: "Trace Viewer",
+                hostName: nil,
+                processName: nil,
+                startedAt: nil,
+                storeTraces: []
+            ),
+            visibleStoreTraces: [],
+            primaryTraceCollection: emptyTraceCollection(),
+            orderedIDs: [],
+            itemsByID: [:],
+            childrenByParentID: [:],
+            descendantCountByID: [:],
+            overviewGraphNodes: [],
+            overviewGraphNodeByID: [:],
+            overviewGraphIDByTimelineID: [:],
+            overviewGraphMaxLane: 0,
+            overviewGraphTooltipTextByID: [:],
+            graphTrackRows: []
+        )
+    }
+
     static func makeViewerData(
         traceSession: TraceSession,
         storeVisibilityByID: [String: Bool],

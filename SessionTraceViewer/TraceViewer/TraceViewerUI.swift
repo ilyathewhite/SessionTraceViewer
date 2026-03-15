@@ -11,21 +11,16 @@ import SwiftUI
 extension TraceViewer: StoreUINamespace {
     struct ContentView: StoreContentView {
         typealias Nsp = TraceViewer
+        
         @ObservedObject var store: Store
+        @StateObject private var traceViewerListStore = TraceViewerList.store()
+        @StateObject private var traceViewerGraphStore = TraceViewerGraph.store()
+
         private let timelineListIdealWidth: CGFloat = 420
         private let timelineListMinimumWidth: CGFloat = 220
 
         init(_ store: Store) {
             self.store = store
-
-            let traceViewerListStore = TraceViewerList.store(viewerData: store.state.viewerData)
-            store.addChildIfNeeded(traceViewerListStore)
-            store.addChildIfNeeded(
-                TraceViewerGraph.store(
-                    viewerData: store.state.viewerData,
-                    input: traceViewerListStore.state.graphInput
-                )
-            )
         }
 
         var body: some View {
@@ -49,6 +44,7 @@ extension TraceViewer: StoreUINamespace {
                 let parentStore = store
                 let traceViewerListStore = traceViewerListStore
                 let traceViewerGraphStore = traceViewerGraphStore
+
                 traceViewerListStore.bind(to: parentStore, on: \.viewerData) {
                     .mutating(.replaceViewerData($0))
                 }
@@ -78,14 +74,6 @@ extension TraceViewer: StoreUINamespace {
                 max(timelineListMinimumWidth, availableWidth * 0.42)
             )
             return min(max(availableWidth - 1, 0), preferredWidth)
-        }
-
-        private var traceViewerListStore: TraceViewerList.Store {
-            store.child()!
-        }
-
-        private var traceViewerGraphStore: TraceViewerGraph.Store {
-            store.child()!
         }
 
         private var moveGraphSelection: (Int) -> Void {
@@ -119,23 +107,28 @@ extension TraceViewer: StoreUINamespace {
 
                     Divider()
 
-                    HStack(spacing: 8) {
-                        TraceViewerList.ContentView(
-                            listStore,
-                            moveGraphSelection: moveGraphSelection
-                        )
-                        .frame(width: timelineListWidth)
-                        .frame(maxHeight: .infinity)
-
-                        TraceViewerDetails.SelectionContentView(
-                            selection: listStore.state.eventInspectorSelection
-                        )
-                        .id(detailsSelectionIdentity)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if listStore.state.visibleItems.isEmpty {
+                        emptyTimelinePlaceholder
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .viewerInsetPanelStyle()
-                    .background(ViewerTheme.traceViewerContentBackground)
+                    else {
+                        HStack(spacing: 8) {
+                            TraceViewerList.ContentView(
+                                listStore,
+                                moveGraphSelection: moveGraphSelection
+                            )
+                            .frame(width: timelineListWidth)
+                            .frame(maxHeight: .infinity)
+
+                            TraceViewerDetails.SelectionContentView(
+                                selection: listStore.state.eventInspectorSelection
+                            )
+                            .id(detailsSelectionIdentity)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .viewerInsetPanelStyle()
+                        .background(ViewerTheme.traceViewerContentBackground)
+                    }
                 }
                 else {
                     noVisibleStoresPlaceholder
@@ -154,6 +147,17 @@ extension TraceViewer: StoreUINamespace {
                 "No Store Selected",
                 systemImage: "eye.slash",
                 description: Text("Show a store in the sidebar to inspect its timeline and details.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .viewerInsetPanelStyle()
+            .background(ViewerTheme.traceViewerContentBackground)
+        }
+
+        private var emptyTimelinePlaceholder: some View {
+            ContentUnavailableView(
+                "No Timeline Events",
+                systemImage: "list.bullet",
+                description: Text("The visible stores do not contain any recorded events.")
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .viewerInsetPanelStyle()

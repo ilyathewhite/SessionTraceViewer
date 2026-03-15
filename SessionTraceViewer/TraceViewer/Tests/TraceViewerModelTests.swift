@@ -485,6 +485,42 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
+    func testListStoreCanStartEmptyAndReceiveViewerDataLater() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        let viewerData = TraceViewer.StoreState(traceSession: traceSession).viewerData
+        let listStore = TraceViewerList.store()
+
+        XCTAssertFalse(listStore.state.hasVisibleStores)
+        XCTAssertTrue(listStore.state.visibleItems.isEmpty)
+        XCTAssertEqual(listStore.state.graphInput, .empty)
+
+        listStore.send(.mutating(.replaceViewerData(viewerData)))
+
+        XCTAssertTrue(listStore.state.hasVisibleStores)
+        XCTAssertEqual(listStore.state.visibleIDs, viewerData.orderedIDs)
+        XCTAssertEqual(listStore.state.graphInput, makeGraphInput(from: viewerData))
+    }
+
+    @Test
+    func testGraphStoreCanStartEmptyAndReceiveViewerDataLater() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let input = makeGraphInput(from: traceViewerState.viewerData)
+        let graphStore = TraceViewerGraph.store()
+
+        XCTAssertEqual(graphStore.state.input, .empty)
+        XCTAssertTrue(graphStore.state.presentation.columns.isEmpty)
+        XCTAssertTrue(graphStore.state.presentation.trackRows.isEmpty)
+
+        graphStore.send(.mutating(.replaceViewerData(traceViewerState.viewerData)))
+        graphStore.send(.mutating(.updateInput(input)))
+
+        XCTAssertEqual(graphStore.state.input, input)
+        XCTAssertEqual(graphStore.state.presentation.trackRows, traceViewerState.viewerData.graphTrackRows)
+        XCTAssertFalse(graphStore.state.presentation.columns.isEmpty)
+    }
+
+    @Test
     func testCombinedGraphKeepsTrackAssignmentStableAcrossVisibilityChanges() async throws {
         let traceSession = try await makeCombinedTraceSessionForTests()
         var traceViewerState = TraceViewer.StoreState(traceSession: traceSession)

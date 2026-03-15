@@ -9,6 +9,10 @@ import Foundation
 import ReducerArchitecture
 
 extension TraceViewerList.StoreState {
+    init() {
+        self.init(viewerData: TraceViewer.emptyViewerData())
+    }
+
     private static var scopeBarEventKinds: [TraceViewer.EventKind] {
         [
             .state,

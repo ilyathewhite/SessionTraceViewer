@@ -24,6 +24,10 @@ extension TraceViewerGraph.StoreState {
         let maxLane: Int
     }
 
+    init() {
+        self.init(viewerData: TraceViewer.emptyViewerData(), input: .empty)
+    }
+
     init(traceCollection: SessionTraceCollection, input: TraceViewerGraph.Input) {
         self.init(
             viewerData: TraceViewer.makeViewerData(
