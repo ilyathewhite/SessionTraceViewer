@@ -39,30 +39,23 @@ extension TraceViewerList.StoreState {
         self.scopeFilter = .all
         self.collapsedIDs = []
         self.selectedID = viewerData.orderedIDs.first
+        self.visibleIDs = []
+        self.visibleItems = []
+        self.selectableVisibleIDs = []
+        self.selectableVisibleIDSet = []
+        self.graphInput = .init(
+            visibleTimelineIDs: [],
+            selectableTimelineIDs: [],
+            selectedTimelineID: nil
+        )
+        self.selectedItem = nil
+        self.selectedPreviousStateItem = nil
+        self.eventInspectorSelection = .init(item: nil, previousStateItem: nil)
+        refreshDerivedData()
     }
 
     var hasVisibleStores: Bool {
         visibleStoreCount > 0
-    }
-
-    var visibleIDs: [String] {
-        var hiddenIDs: Set<String> = []
-        var visible: [String] = []
-        visible.reserveCapacity(orderedIDs.count)
-
-        for id in orderedIDs {
-            guard !hiddenIDs.contains(id) else { continue }
-            visible.append(id)
-
-            if collapsedIDs.contains(id) {
-                hiddenIDs.formUnion(descendants(of: id))
-            }
-        }
-        return visible
-    }
-
-    var visibleItems: [TraceViewer.TimelineItem] {
-        visibleIDs.compactMap { itemsByID[$0] }
     }
 
     var scopeBarKinds: [TraceViewer.EventKind] {
@@ -83,21 +76,6 @@ extension TraceViewerList.StoreState {
         }
     }
 
-    var selectableVisibleIDs: [String] {
-        visibleIDs.filter { id in
-            guard let item = itemsByID[id] else { return false }
-            return matchesScopeFilter(item)
-        }
-    }
-
-    var graphInput: TraceViewerGraph.Input {
-        .init(
-            visibleTimelineIDs: visibleIDs,
-            selectableTimelineIDs: selectableVisibleIDs,
-            selectedTimelineID: selectedID
-        )
-    }
-
     private func matchesScopeFilter(_ item: TraceViewer.TimelineItem) -> Bool {
         switch scopeFilter {
         case .all:
@@ -106,37 +84,6 @@ extension TraceViewerList.StoreState {
             return selection.eventKinds.contains(item.kind)
                 || (selection.includesUserEvents && item.isUserSourceEvent)
         }
-    }
-
-    var selectedItem: TraceViewer.TimelineItem? {
-        guard let selectedID else { return nil }
-        return itemsByID[selectedID]
-    }
-
-    var selectedPreviousStateItem: TraceViewer.TimelineItem? {
-        guard let selectedID,
-              let selectedItem = itemsByID[selectedID],
-              case .state = selectedItem.node,
-              let selectedIndex = orderedIDs.firstIndex(of: selectedID),
-              selectedIndex > 0 else {
-            return nil
-        }
-
-        for index in stride(from: selectedIndex - 1, through: 0, by: -1) {
-            guard let item = itemsByID[orderedIDs[index]] else { continue }
-            if item.storeInstanceID == selectedItem.storeInstanceID,
-               case .state = item.node {
-                return item
-            }
-        }
-        return nil
-    }
-
-    var eventInspectorSelection: EventInspector.Selection {
-        .init(
-            item: selectedItem,
-            previousStateItem: selectedPreviousStateItem
-        )
     }
 
     func isCollapsed(_ id: String) -> Bool {
@@ -149,11 +96,7 @@ extension TraceViewerList.StoreState {
     }
 
     func isSelectableTimelineID(_ id: String) -> Bool {
-        guard visibleIDs.contains(id),
-              let item = itemsByID[id] else {
-            return false
-        }
-        return matchesScopeFilter(item)
+        selectableVisibleIDSet.contains(id)
     }
 
     func hasChildren(_ id: String) -> Bool {
@@ -196,8 +139,17 @@ extension TraceViewerList.StoreState {
 
     mutating func clampSelection(
         anchorID: String? = nil,
-        prefersFirstSelectable: Bool = false
+        prefersFirstSelectable: Bool = false,
+        refreshVisibility: Bool = false
     ) {
+        if refreshVisibility {
+            refreshVisibilityDerivedData()
+        }
+
+        defer {
+            refreshSelectionDerivedData()
+        }
+
         let visibleIDs = visibleIDs
         let selectableVisibleIDs = selectableVisibleIDs
         guard !selectableVisibleIDs.isEmpty else {
@@ -242,6 +194,7 @@ extension TraceViewerList.StoreState {
 
     mutating func selectAllEventKinds() {
         scopeFilter = .all
+        refreshVisibilityDerivedData()
         clampSelection(prefersFirstSelectable: true)
     }
 
@@ -251,8 +204,10 @@ extension TraceViewerList.StoreState {
         }
         if !isSelectableTimelineID(id) {
             scopeFilter = .all
+            refreshVisibilityDerivedData()
         }
         selectedID = id
+        refreshSelectionDerivedData()
     }
 
     mutating func toggleEventKindFilter(_ kind: TraceViewer.EventKind) {
@@ -268,6 +223,7 @@ extension TraceViewerList.StoreState {
             }
             scopeFilter = .custom(selection)
         }
+        refreshVisibilityDerivedData()
         clampSelection(prefersFirstSelectable: true)
     }
 
@@ -279,6 +235,7 @@ extension TraceViewerList.StoreState {
             selection.includesUserEvents.toggle()
             scopeFilter = .custom(selection)
         }
+        refreshVisibilityDerivedData()
         clampSelection(prefersFirstSelectable: true)
     }
 
@@ -286,30 +243,36 @@ extension TraceViewerList.StoreState {
         let selectableVisibleIDs = selectableVisibleIDs
         guard !selectableVisibleIDs.isEmpty else {
             selectedID = nil
+            refreshSelectionDerivedData()
             return
         }
 
         if selectedID == nil {
             selectedID = selectableVisibleIDs.first
+            refreshSelectionDerivedData()
             return
         }
 
         guard let selectedID,
               let currentIndex = selectableVisibleIDs.firstIndex(of: selectedID) else {
             self.selectedID = selectableVisibleIDs.first
+            refreshSelectionDerivedData()
             return
         }
 
         let nextIndex = min(max(currentIndex + offset, 0), selectableVisibleIDs.count - 1)
         self.selectedID = selectableVisibleIDs[nextIndex]
+        refreshSelectionDerivedData()
     }
 
     mutating func selectFirstVisible() {
         selectedID = selectableVisibleIDs.first
+        refreshSelectionDerivedData()
     }
 
     mutating func selectLastVisible() {
         selectedID = selectableVisibleIDs.last
+        refreshSelectionDerivedData()
     }
 
     mutating func focusOnSelection() {
@@ -321,7 +284,7 @@ extension TraceViewerList.StoreState {
         for id in orderedIDs where hasChildren(id) && !protected.contains(id) {
             collapsedIDs.insert(id)
         }
-        clampSelection()
+        clampSelection(refreshVisibility: true)
     }
 
     mutating func replaceViewerData(_ viewerData: TraceViewer.ViewerData) {
@@ -333,6 +296,7 @@ extension TraceViewerList.StoreState {
         self = .init(viewerData: viewerData)
         scopeFilter = previousScopeFilter
         collapsedIDs = previousCollapsedIDs.intersection(Set(orderedIDs))
+        refreshVisibilityDerivedData()
         if let previousSelectedID,
            itemsByID[previousSelectedID] != nil {
             selectedID = previousSelectedID
@@ -355,6 +319,7 @@ extension TraceViewerList.StoreState {
         let selectableVisibleIDs = selectableVisibleIDs
         guard !selectableVisibleIDs.isEmpty else {
             selectedID = nil
+            refreshSelectionDerivedData()
             return
         }
 
@@ -370,6 +335,7 @@ extension TraceViewerList.StoreState {
         else {
             selectedID = selectableVisibleIDs.last
         }
+        refreshSelectionDerivedData()
     }
 
     func selectionID(matching previousSelectedItem: TraceViewer.TimelineItem) -> String? {
@@ -412,5 +378,69 @@ extension TraceViewerList.StoreState {
                 ]
             )
         )
+    }
+
+    private mutating func refreshDerivedData() {
+        refreshVisibilityDerivedData()
+        refreshSelectionDerivedData()
+    }
+
+    private mutating func refreshVisibilityDerivedData() {
+        var hiddenIDs: Set<String> = []
+        var nextVisibleIDs: [String] = []
+        nextVisibleIDs.reserveCapacity(orderedIDs.count)
+
+        for id in orderedIDs {
+            guard !hiddenIDs.contains(id) else { continue }
+            nextVisibleIDs.append(id)
+
+            if collapsedIDs.contains(id) {
+                hiddenIDs.formUnion(descendants(of: id))
+            }
+        }
+
+        visibleIDs = nextVisibleIDs
+        visibleItems = nextVisibleIDs.compactMap { itemsByID[$0] }
+        selectableVisibleIDs = nextVisibleIDs.filter { id in
+            guard let item = itemsByID[id] else { return false }
+            return matchesScopeFilter(item)
+        }
+        selectableVisibleIDSet = Set(selectableVisibleIDs)
+    }
+
+    private mutating func refreshSelectionDerivedData() {
+        selectedItem = selectedID.flatMap { itemsByID[$0] }
+        selectedPreviousStateItem = previousStateItem(for: selectedItem, selectedID: selectedID)
+        graphInput = .init(
+            visibleTimelineIDs: visibleIDs,
+            selectableTimelineIDs: selectableVisibleIDs,
+            selectedTimelineID: selectedID
+        )
+        eventInspectorSelection = .init(
+            item: selectedItem,
+            previousStateItem: selectedPreviousStateItem
+        )
+    }
+
+    private func previousStateItem(
+        for selectedItem: TraceViewer.TimelineItem?,
+        selectedID: String?
+    ) -> TraceViewer.TimelineItem? {
+        guard let selectedID,
+              let selectedItem,
+              case .state = selectedItem.node,
+              let selectedIndex = orderedIDs.firstIndex(of: selectedID),
+              selectedIndex > 0 else {
+            return nil
+        }
+
+        for index in stride(from: selectedIndex - 1, through: 0, by: -1) {
+            guard let item = itemsByID[orderedIDs[index]] else { continue }
+            if item.storeInstanceID == selectedItem.storeInstanceID,
+               case .state = item.node {
+                return item
+            }
+        }
+        return nil
     }
 }

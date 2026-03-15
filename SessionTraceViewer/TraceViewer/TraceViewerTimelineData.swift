@@ -227,9 +227,10 @@ extension TraceViewer.TimelineData {
 extension TraceViewer {
     static func makeViewerData(
         traceSession: TraceSession,
-        storeVisibilityByID: [String: Bool]
+        storeVisibilityByID: [String: Bool],
+        localDataByStoreID: [String: TimelineData]? = nil
     ) -> ViewerData {
-        let allLocalDataByStoreID = Dictionary(
+        let allLocalDataByStoreID = localDataByStoreID ?? Dictionary(
             uniqueKeysWithValues: traceSession.storeTraces.map { storeTrace in
                 (
                     storeTrace.id,

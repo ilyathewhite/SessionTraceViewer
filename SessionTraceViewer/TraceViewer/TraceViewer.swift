@@ -142,7 +142,10 @@ enum TraceViewer: StoreNamespace {
     struct StoreState {
         var traceSession: TraceSession
         var storeVisibilityByID: [String: Bool]
+        var sessionData: SessionData
         var viewerData: ViewerData
+        var storeLayerRootCache: [StoreLayer]
+        var storeLayerCache: [StoreLayer]
         var contentVersion = 0
     }
 }

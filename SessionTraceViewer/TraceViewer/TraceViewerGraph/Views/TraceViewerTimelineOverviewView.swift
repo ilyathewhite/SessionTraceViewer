@@ -195,7 +195,9 @@ extension TraceViewerGraph {
         }
 
         private func overviewContent(contentWidth: CGFloat) -> some View {
-            LazyHStack(spacing: 0) {
+            let overlayModels = segmentOverlayModels(contentWidth: contentWidth)
+
+            return LazyHStack(spacing: 0) {
                 ForEach(presentation.columns) { column in
                     TimelineOverviewColumnView(
                         column: column,
@@ -210,10 +212,10 @@ extension TraceViewerGraph {
             }
             .frame(minWidth: contentWidth, alignment: .topLeading)
             .background(alignment: .topLeading) {
-                segmentRegionOverlay(contentWidth: contentWidth)
+                segmentRegionOverlay(overlayModels: overlayModels)
             }
             .overlay(alignment: .topLeading) {
-                segmentLabelOverlay(contentWidth: contentWidth)
+                segmentLabelOverlay(overlayModels: overlayModels)
             }
             .overlay(alignment: .topLeading) {
                 if let hoveredTooltip {
@@ -235,9 +237,11 @@ extension TraceViewerGraph {
             .padding(.vertical, Layout.contentVerticalInset)
         }
 
-        private func segmentRegionOverlay(contentWidth: CGFloat) -> some View {
+        private func segmentRegionOverlay(
+            overlayModels: [SegmentOverlayModel]
+        ) -> some View {
             ZStack(alignment: .topLeading) {
-                ForEach(segmentOverlayModels(contentWidth: contentWidth)) { overlay in
+                ForEach(overlayModels) { overlay in
                     TimelineOverviewSegmentRegionView(
                         overlay: overlay,
                         layout: layout
@@ -247,9 +251,11 @@ extension TraceViewerGraph {
             .allowsHitTesting(false)
         }
 
-        private func segmentLabelOverlay(contentWidth: CGFloat) -> some View {
+        private func segmentLabelOverlay(
+            overlayModels: [SegmentOverlayModel]
+        ) -> some View {
             ZStack(alignment: .topLeading) {
-                ForEach(segmentOverlayModels(contentWidth: contentWidth)) { overlay in
+                ForEach(overlayModels) { overlay in
                     TimelineOverviewSegmentLabelView(
                         overlay: overlay,
                         layout: layout

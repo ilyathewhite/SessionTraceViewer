@@ -61,6 +61,14 @@ enum TraceViewerList: StoreNamespace {
         var scopeFilter: ScopeFilter
         var collapsedIDs: Set<String>
         var selectedID: String?
+        var visibleIDs: [String]
+        var visibleItems: [TraceViewer.TimelineItem]
+        var selectableVisibleIDs: [String]
+        var selectableVisibleIDSet: Set<String>
+        var graphInput: TraceViewerGraph.Input
+        var selectedItem: TraceViewer.TimelineItem?
+        var selectedPreviousStateItem: TraceViewer.TimelineItem?
+        var eventInspectorSelection: EventInspector.Selection
     }
 }
 
@@ -160,32 +168,32 @@ extension TraceViewerList {
             else {
                 state.collapsedIDs.insert(selectedID)
             }
-            state.clampSelection()
+            state.clampSelection(refreshVisibility: true)
             shouldResetTimelineListFocus = true
 
         case .collapseSelected:
             guard let selectedID = state.selectedID else { break }
             guard state.hasChildren(selectedID) else { break }
             state.collapsedIDs.insert(selectedID)
-            state.clampSelection()
+            state.clampSelection(refreshVisibility: true)
             shouldResetTimelineListFocus = true
 
         case .expandSelected:
             guard let selectedID = state.selectedID else { break }
             state.collapsedIDs.remove(selectedID)
-            state.clampSelection()
+            state.clampSelection(refreshVisibility: true)
             shouldResetTimelineListFocus = true
 
         case .collapseAll:
             for id in state.orderedIDs where state.hasChildren(id) {
                 state.collapsedIDs.insert(id)
             }
-            state.clampSelection()
+            state.clampSelection(refreshVisibility: true)
             shouldResetTimelineListFocus = true
 
         case .expandAll:
             state.collapsedIDs.removeAll()
-            state.clampSelection()
+            state.clampSelection(refreshVisibility: true)
             shouldResetTimelineListFocus = true
 
         case .focusSelection:

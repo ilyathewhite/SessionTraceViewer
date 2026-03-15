@@ -134,25 +134,10 @@ enum StringDiff: StoreNamespace {
         let string2: String
         var diffSections: AsyncTaskValue<[DiffSection], Never>
         var selectedDiffIndex: Int?
-
-        var diffHunks: [DiffSection] {
-            diffSections.value?.filter(\.isDiff) ?? []
-        }
-
-        var selectedDiffID: String? {
-            guard let selectedDiffIndex, diffHunks.indices.contains(selectedDiffIndex) else { return nil }
-            return diffHunks[selectedDiffIndex].id
-        }
-
-        var previousDiffDisabled: Bool {
-            guard let selectedDiffIndex else { return diffHunks.isEmpty }
-            return selectedDiffIndex <= 0
-        }
-
-        var nextDiffDisabled: Bool {
-            guard let selectedDiffIndex else { return diffHunks.isEmpty }
-            return selectedDiffIndex >= diffHunks.count - 1
-        }
+        var diffHunks: [DiffSection]
+        var selectedDiffID: String?
+        var previousDiffDisabled: Bool
+        var nextDiffDisabled: Bool
 
         init(
             title: String,
@@ -173,40 +158,90 @@ enum StringDiff: StoreNamespace {
             self.diffSections = diffSections
                 ?? .success(StringDiff.makeDiffSections(string1: string1, string2: string2))
             self.selectedDiffIndex = selectedDiffIndex
-            normalizeSelectedDiffIndex()
+            self.diffHunks = []
+            self.selectedDiffID = nil
+            self.previousDiffDisabled = true
+            self.nextDiffDisabled = true
+            refreshDerivedState()
         }
 
         mutating func normalizeSelectedDiffIndex() {
-            selectedDiffIndex = normalizedSelectedDiffIndex
+            refreshSelectionState()
         }
 
         mutating func selectDiff(id: String) {
             guard let index = diffHunks.firstIndex(where: { $0.id == id }) else { return }
             selectedDiffIndex = index
+            refreshSelectionState()
         }
 
         mutating func selectPreviousDiff() {
-            selectedDiffIndex = previousSelectedDiffIndex
+            selectedDiffIndex = previousSelectedDiffIndex(
+                for: diffHunks,
+                selectedDiffIndex: selectedDiffIndex
+            )
+            refreshSelectionState()
         }
 
         mutating func selectNextDiff() {
-            selectedDiffIndex = nextSelectedDiffIndex
+            selectedDiffIndex = nextSelectedDiffIndex(
+                for: diffHunks,
+                selectedDiffIndex: selectedDiffIndex
+            )
+            refreshSelectionState()
         }
 
-        private var normalizedSelectedDiffIndex: Int? {
+        mutating func refreshDerivedState() {
+            diffHunks = diffSections.value?.filter(\.isDiff) ?? []
+            refreshSelectionState()
+        }
+
+        private mutating func refreshSelectionState() {
+            selectedDiffIndex = normalizedSelectedDiffIndex(
+                for: diffHunks,
+                selectedDiffIndex: selectedDiffIndex
+            )
+            if let selectedDiffIndex,
+               diffHunks.indices.contains(selectedDiffIndex) {
+                selectedDiffID = diffHunks[selectedDiffIndex].id
+            }
+            else {
+                selectedDiffID = nil
+            }
+
+            if let selectedDiffIndex {
+                previousDiffDisabled = selectedDiffIndex <= 0
+                nextDiffDisabled = selectedDiffIndex >= diffHunks.count - 1
+            }
+            else {
+                previousDiffDisabled = diffHunks.isEmpty
+                nextDiffDisabled = diffHunks.isEmpty
+            }
+        }
+
+        private func normalizedSelectedDiffIndex(
+            for diffHunks: [DiffSection],
+            selectedDiffIndex: Int?
+        ) -> Int? {
             guard !diffHunks.isEmpty else { return nil }
             guard let selectedDiffIndex else { return 0 }
             guard diffHunks.indices.contains(selectedDiffIndex) else { return 0 }
             return selectedDiffIndex
         }
 
-        private var previousSelectedDiffIndex: Int? {
+        private func previousSelectedDiffIndex(
+            for diffHunks: [DiffSection],
+            selectedDiffIndex: Int?
+        ) -> Int? {
             guard !diffHunks.isEmpty else { return nil }
             guard let selectedDiffIndex else { return 0 }
             return max(selectedDiffIndex - 1, 0)
         }
 
-        private var nextSelectedDiffIndex: Int? {
+        private func nextSelectedDiffIndex(
+            for diffHunks: [DiffSection],
+            selectedDiffIndex: Int?
+        ) -> Int? {
             guard !diffHunks.isEmpty else { return nil }
             guard let selectedDiffIndex else { return 0 }
             return min(selectedDiffIndex + 1, diffHunks.count - 1)
@@ -247,11 +282,12 @@ extension StringDiff {
         case .loadDiff:
             guard case .notStarted = state.diffSections else { return .none }
             state.diffSections = .inProgress
+            state.refreshDerivedState()
             return .action(.effect(.loadDiff(string1: state.string1, string2: state.string2)))
 
         case .didLoadDiff(let sections):
             state.diffSections = .success(sections)
-            state.normalizeSelectedDiffIndex()
+            state.refreshDerivedState()
             return .none
 
         case .selectDiff(let id):

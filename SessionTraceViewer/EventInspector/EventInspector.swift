@@ -39,42 +39,37 @@ enum EventInspector: StoreNamespace {
         var detailRowExpansionByID: [String: Bool] = [:]
         var valueRowExpansionByID: [String: Bool] = [:]
         var inlineDiffRowID: String?
+        var item: TraceViewer.TimelineItem?
+        var previousStateItem: TraceViewer.TimelineItem?
+        var showsDetailsCard: Bool
+        var detailRows: [EventInspectorFormatter.ValueRow]
+        var valueRows: [EventInspectorFormatter.ValueRow]?
 
-        var item: TraceViewer.TimelineItem? {
-            selection.item
-        }
-
-        var previousStateItem: TraceViewer.TimelineItem? {
-            selection.previousStateItem
-        }
-
-        var showsDetailsCard: Bool {
-            guard let item else { return false }
-            return !EventInspector.isStateItem(item)
-        }
-
-        var detailRows: [EventInspectorFormatter.ValueRow] {
-            guard let item else { return [] }
-
-            return EventInspectorFormatter.keyValues(for: item).enumerated().map { index, pair in
-                EventInspectorFormatter.ValueRow(
-                    id: "details-\(index)-\(pair.0)",
-                    property: pair.0,
-                    value: pair.1,
-                    isChanged: false,
-                    change: nil,
-                    isExpandable: EventInspectorFormatter.valueNeedsExpansion(pair.1),
-                    isExpandedByDefault: EventInspectorFormatter.valueExpandsByDefault(pair.1)
-                )
-            }
-        }
-
-        var valueRows: [EventInspectorFormatter.ValueRow]? {
-            guard let item else { return nil }
-            return EventInspectorFormatter.valueRows(
-                for: item,
-                previousStateItem: previousStateItem
+        init(selection: Selection) {
+            self.init(
+                selection: selection,
+                detailRowExpansionByID: [:],
+                valueRowExpansionByID: [:],
+                inlineDiffRowID: nil
             )
+        }
+
+        init(
+            selection: Selection,
+            detailRowExpansionByID: [String: Bool],
+            valueRowExpansionByID: [String: Bool],
+            inlineDiffRowID: String?
+        ) {
+            self.selection = selection
+            self.detailRowExpansionByID = detailRowExpansionByID
+            self.valueRowExpansionByID = valueRowExpansionByID
+            self.inlineDiffRowID = inlineDiffRowID
+            self.item = nil
+            self.previousStateItem = nil
+            self.showsDetailsCard = false
+            self.detailRows = []
+            self.valueRows = nil
+            refreshDerivedState()
         }
 
         func detailRow(forID id: String) -> EventInspectorFormatter.ValueRow? {
@@ -99,6 +94,7 @@ enum EventInspector: StoreNamespace {
             detailRowExpansionByID = [:]
             valueRowExpansionByID = [:]
             inlineDiffRowID = nil
+            refreshDerivedState()
             return true
         }
 
@@ -118,6 +114,34 @@ enum EventInspector: StoreNamespace {
             }
             let currentValue = valueRowExpansionByID[id] ?? row.isExpandedByDefault
             valueRowExpansionByID[id] = !currentValue
+        }
+
+        private mutating func refreshDerivedState() {
+            item = selection.item
+            previousStateItem = selection.previousStateItem
+            showsDetailsCard = item.map { !EventInspector.isStateItem($0) } ?? false
+
+            if let item {
+                detailRows = EventInspectorFormatter.keyValues(for: item).enumerated().map { index, pair in
+                    EventInspectorFormatter.ValueRow(
+                        id: "details-\(index)-\(pair.0)",
+                        property: pair.0,
+                        value: pair.1,
+                        isChanged: false,
+                        change: nil,
+                        isExpandable: EventInspectorFormatter.valueNeedsExpansion(pair.1),
+                        isExpandedByDefault: EventInspectorFormatter.valueExpandsByDefault(pair.1)
+                    )
+                }
+                valueRows = EventInspectorFormatter.valueRows(
+                    for: item,
+                    previousStateItem: previousStateItem
+                )
+            }
+            else {
+                detailRows = []
+                valueRows = nil
+            }
         }
     }
 }
