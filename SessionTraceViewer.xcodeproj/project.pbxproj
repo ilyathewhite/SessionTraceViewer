@@ -919,7 +919,7 @@
 			repositoryURL = "https://github.com/ilyathewhite/ReducerArchitecture.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.4.9;
+				minimumVersion = 1.4.10;
 			};
 		};
 		09F0A00E2A00000E00C831B2 /* XCRemoteSwiftPackageReference "SwiftUIEx" */ = {

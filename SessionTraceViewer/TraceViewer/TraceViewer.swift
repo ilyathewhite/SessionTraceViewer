@@ -17,6 +17,7 @@ enum TraceViewer: StoreNamespace {
         case replaceTraceSession(TraceSession)
         case replaceTraceCollection(SessionTraceCollection)
         case setStoreVisibility(id: String, isVisible: Bool)
+        case showOnlyStore(id: String)
         case toggleStoreVisibility(id: String)
     }
 
@@ -92,6 +93,34 @@ enum TraceViewer: StoreNamespace {
         let id: String
         let displayName: String
         let isVisible: Bool
+        let childKeyLineText: String?
+        let statusText: String?
+        let eventCount: Int
+        let children: [StoreLayer]
+
+        var outlineChildren: [StoreLayer]? {
+            children.isEmpty ? nil : children
+        }
+
+        var eventCountText: String {
+            switch eventCount {
+            case 0:
+                return "no events"
+            case 1:
+                return "1 event"
+            default:
+                return "\(eventCount) events"
+            }
+        }
+
+        var metadataText: String {
+            [statusText, eventCountText]
+                .compactMap { text in
+                    guard let text, !text.isEmpty else { return nil }
+                    return text
+                }
+                .joined(separator: " • ")
+        }
     }
 
     struct ViewerData: Equatable {
@@ -142,6 +171,10 @@ extension TraceViewer {
 
         case .setStoreVisibility(let id, let isVisible):
             state.setStoreVisibility(id: id, isVisible: isVisible)
+            return .none
+
+        case .showOnlyStore(let id):
+            state.showOnlyStore(id: id)
             return .none
 
         case .toggleStoreVisibility(let id):

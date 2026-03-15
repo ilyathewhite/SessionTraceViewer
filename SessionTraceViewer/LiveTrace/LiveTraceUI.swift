@@ -122,7 +122,7 @@ extension LiveTrace: StoreUINamespace {
                 ContentUnavailableView(
                     "Waiting For Live Trace",
                     systemImage: "point.3.connected.trianglepath.dotted",
-                    description: Text("Configure `LiveTraceConfig.shared`, enable `store.logConfig.liveTraceEnabled = true` in the traced app, and keep SessionTraceViewer open.")
+                    description: Text("Configure `LiveTraceConfig.shared`, set `LiveTraceConfig.shared.traceAllStores = true` or enable `store.logConfig.liveTraceEnabled = .selfAndChildren` in the traced app, and keep SessionTraceViewer open.")
                 )
             }
         }
@@ -218,56 +218,9 @@ private struct SessionStoreLayersView: View {
     @ObservedObject var traceViewerStore: TraceViewer.Store
 
     var body: some View {
-        ForEach(traceViewerStore.state.storeLayers) { storeLayer in
-            StoreLayerRow(
-                storeLayer: storeLayer,
-                setVisibility: { isVisible in
-                    traceViewerStore.send(
-                        .mutating(
-                            .setStoreVisibility(
-                                id: storeLayer.id,
-                                isVisible: isVisible
-                            )
-                        )
-                    )
-                }
-            )
-        }
-    }
-}
-
-private struct StoreLayerRow: View {
-    let storeLayer: TraceViewer.StoreLayer
-    let setVisibility: (Bool) -> Void
-
-    private var visibilitySymbolName: String {
-        storeLayer.isVisible ? "eye" : "eye.slash"
-    }
-
-    var body: some View {
-        Button(action: {
-            setVisibility(!storeLayer.isVisible)
-        }) {
-            HStack(spacing: 8) {
-                Text(storeLayer.displayName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(ViewerTheme.primaryText)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                Image(systemName: visibilitySymbolName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(storeLayer.isVisible ? ViewerTheme.primaryText : ViewerTheme.secondaryText)
-                    .frame(width: 28, height: 28)
-            }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(storeLayer.isVisible ? "Hide Store" : "Show Store")
+        TraceViewer.StoreLayersOutlineView(
+            store: traceViewerStore,
+            rowVerticalPadding: 3
+        )
     }
 }

@@ -4,10 +4,10 @@
     {
       "identity" : "asyncnavigation",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ilyathewhite/AsyncNavigation",
+      "location" : "https://github.com/ilyathewhite/AsyncNavigation.git",
       "state" : {
-        "revision" : "3126daa6de143d25fbdf02c154ad8034e4760417",
-        "version" : "1.0.12"
+        "revision" : "a9e43c61abd38f0095d2e5d1e845f95841239c1b",
+        "version" : "1.0.13"
       }
     },
     {
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ilyathewhite/ReducerArchitecture.git",
       "state" : {
-        "revision" : "6ad7fdf0a5316ccfe7974bb6c90e68e71780dc97",
-        "version" : "1.4.9"
+        "revision" : "e96e123eb028ac7dc026901fc5422eb84f39c165",
+        "version" : "1.4.10"
       }
     },
     {

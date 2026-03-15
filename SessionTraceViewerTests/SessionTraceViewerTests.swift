@@ -201,6 +201,72 @@ func makeCombinedTraceSessionForTests() async throws -> TraceSession {
     )
 }
 
+@MainActor
+func makeHierarchicalTraceSessionForTests() async throws -> TraceSession {
+    let collection = try await makeStateFromGeneratedTrace().traceCollection
+
+    return TraceSession(
+        sessionID: "hierarchical.trace-session.tests",
+        title: "Hierarchical Trace Session",
+        hostName: "Test Host",
+        processName: "SessionTraceViewerTests",
+        startedAt: Date(timeIntervalSince1970: 200),
+        storeTraces: [
+            .init(
+                storeInstanceID: "root.s1",
+                storeName: "Root Store",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 200),
+                endedAt: Date(timeIntervalSince1970: 230),
+                traceCollection: collection
+            ),
+            .init(
+                storeInstanceID: "child.a.s2",
+                storeName: "Child Store A",
+                parentStoreInstanceID: "root.s1",
+                childKeyInParentStore: "childA",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 205),
+                endedAt: Date(timeIntervalSince1970: 225),
+                traceCollection: collection
+            ),
+            .init(
+                storeInstanceID: "grandchild.s3",
+                storeName: "Grandchild Store",
+                parentStoreInstanceID: "child.a.s2",
+                childKeyInParentStore: "grandchild",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 210),
+                endedAt: Date(timeIntervalSince1970: 220),
+                traceCollection: collection
+            ),
+            .init(
+                storeInstanceID: "child.b.s4",
+                storeName: "Child Store B",
+                parentStoreInstanceID: "root.s1",
+                childKeyInParentStore: "childB",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 215),
+                endedAt: Date(timeIntervalSince1970: 228),
+                traceCollection: collection
+            ),
+            .init(
+                storeInstanceID: "independent.s5",
+                storeName: "Independent Store",
+                hostName: nil,
+                processName: nil,
+                startedAt: Date(timeIntervalSince1970: 240),
+                endedAt: Date(timeIntervalSince1970: 250),
+                traceCollection: collection
+            )
+        ]
+    )
+}
+
 func makeStateFromRecordMeetingTrace() throws -> TraceViewerList.StoreState {
     let traceURL = URL(fileURLWithPath: "/Users/ilya/Development/RecordMeeting.lzma")
     let data = try Data(contentsOf: traceURL)
@@ -248,7 +314,7 @@ private func configureLiveTraceForTests<Nsp: StoreNamespace>(
         collector?.receive(envelope)
     }
     LiveTraceConfig.shared = config
-    store.logConfig.liveTraceEnabled = true
+    store.logConfig.liveTraceEnabled = .selfOnly
 }
 
 func exactCaseLabel(from code: String?) -> String? {

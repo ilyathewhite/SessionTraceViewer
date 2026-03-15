@@ -82,6 +82,7 @@ enum TraceViewerGraph: StoreNamespace {
         let storeName: String
         let startColumn: Int
         let endColumn: Int
+        let extendsToTrailingEdge: Bool
         let baseLane: Int
         let maxLane: Int
         let trackMaxLane: Int

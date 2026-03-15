@@ -150,12 +150,12 @@ extension TraceViewerGraph {
             )
         }
 
-        private var segmentOverlayModels: [SegmentOverlayModel] {
+        private func segmentOverlayModels(contentWidth: CGFloat) -> [SegmentOverlayModel] {
             presentation.trackRows.flatMap { trackRow in
                 trackRow.segments.map { segment in
                     .init(
                         segment: segment,
-                        rect: segmentRect(for: segment),
+                        rect: segmentRect(for: segment, contentWidth: contentWidth),
                         isSelected: selectedStoreInstanceID == segment.storeInstanceID
                     )
                 }
@@ -163,21 +163,28 @@ extension TraceViewerGraph {
         }
 
         var body: some View {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: true) {
-                    overviewContent
-                }
-                .onHover { isHovering in
-                    if !isHovering {
-                        hoveredNodeID = nil
+            GeometryReader { geometry in
+                let contentWidth = max(
+                    graphWidth,
+                    max(geometry.size.width - Layout.contentHorizontalInset * 2, 0)
+                )
+
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        overviewContent(contentWidth: contentWidth)
                     }
-                }
-                .onAppear {
-                    scrollToSelected(using: proxy, animated: false)
-                }
-                .onChange(of: selectedColumnID) { oldValue, newValue in
-                    guard oldValue != newValue else { return }
-                    scrollToSelected(using: proxy, animated: true)
+                    .onHover { isHovering in
+                        if !isHovering {
+                            hoveredNodeID = nil
+                        }
+                    }
+                    .onAppear {
+                        scrollToSelected(using: proxy, animated: false)
+                    }
+                    .onChange(of: selectedColumnID) { oldValue, newValue in
+                        guard oldValue != newValue else { return }
+                        scrollToSelected(using: proxy, animated: true)
+                    }
                 }
             }
             .frame(
@@ -187,7 +194,7 @@ extension TraceViewerGraph {
             )
         }
 
-        private var overviewContent: some View {
+        private func overviewContent(contentWidth: CGFloat) -> some View {
             LazyHStack(spacing: 0) {
                 ForEach(presentation.columns) { column in
                     TimelineOverviewColumnView(
@@ -201,11 +208,12 @@ extension TraceViewerGraph {
                     .id(column.id)
                 }
             }
+            .frame(minWidth: contentWidth, alignment: .topLeading)
             .background(alignment: .topLeading) {
-                segmentRegionOverlay
+                segmentRegionOverlay(contentWidth: contentWidth)
             }
             .overlay(alignment: .topLeading) {
-                segmentLabelOverlay
+                segmentLabelOverlay(contentWidth: contentWidth)
             }
             .overlay(alignment: .topLeading) {
                 if let hoveredTooltip {
@@ -227,9 +235,9 @@ extension TraceViewerGraph {
             .padding(.vertical, Layout.contentVerticalInset)
         }
 
-        private var segmentRegionOverlay: some View {
+        private func segmentRegionOverlay(contentWidth: CGFloat) -> some View {
             ZStack(alignment: .topLeading) {
-                ForEach(segmentOverlayModels) { overlay in
+                ForEach(segmentOverlayModels(contentWidth: contentWidth)) { overlay in
                     TimelineOverviewSegmentRegionView(
                         overlay: overlay,
                         layout: layout
@@ -239,9 +247,9 @@ extension TraceViewerGraph {
             .allowsHitTesting(false)
         }
 
-        private var segmentLabelOverlay: some View {
+        private func segmentLabelOverlay(contentWidth: CGFloat) -> some View {
             ZStack(alignment: .topLeading) {
-                ForEach(segmentOverlayModels) { overlay in
+                ForEach(segmentOverlayModels(contentWidth: contentWidth)) { overlay in
                     TimelineOverviewSegmentLabelView(
                         overlay: overlay,
                         layout: layout
@@ -258,10 +266,17 @@ extension TraceViewerGraph {
             )
         }
 
-        private func segmentRect(for segment: TraceViewerGraph.TrackSegment) -> CGRect {
+        private func segmentRect(
+            for segment: TraceViewerGraph.TrackSegment,
+            contentWidth: CGFloat
+        ) -> CGRect {
             let x = CGFloat(segment.startColumn) * layout.columnWidth + layout.regionHorizontalInset
-            let width = CGFloat(max(segment.endColumn - segment.startColumn + 1, 1)) * layout.columnWidth
-                - layout.regionHorizontalInset * 2
+            let nominalMaxX = CGFloat(segment.endColumn + 1) * layout.columnWidth
+                - layout.regionHorizontalInset
+            let rectMaxX = segment.extendsToTrailingEdge
+                ? max(nominalMaxX, contentWidth - layout.regionHorizontalInset)
+                : nominalMaxX
+            let width = max(rectMaxX - x, 1)
             let laneTopY = min(layout.laneY(segment.baseLane), layout.laneY(segment.trackMaxLane))
             let laneBottomY = max(layout.laneY(segment.baseLane), layout.laneY(segment.trackMaxLane))
             let topY = laneTopY - layout.regionTopPadding

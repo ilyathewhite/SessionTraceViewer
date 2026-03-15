@@ -254,7 +254,10 @@ extension TraceViewerGraph {
                 storeInstanceID: firstStoreTrace.id
             )
             let tooltipTextByNodeID = timelineData.itemsByID.mapValues(\.title)
-            let maxColumn = overviewGraphPresentation.nodes.map(\.column).max() ?? 0
+            let maxColumn = max(
+                overviewGraphPresentation.nodes.map(\.column).max() ?? -1,
+                firstStoreTrace.endedAt == nil ? 1 : 0
+            )
             return .init(
                 nodes: overviewGraphPresentation.nodes,
                 nodeByID: overviewGraphPresentation.nodeByID,
@@ -273,6 +276,7 @@ extension TraceViewerGraph {
                                 storeName: firstStoreTrace.displayName,
                                 startColumn: 0,
                                 endColumn: maxColumn,
+                                extendsToTrailingEdge: firstStoreTrace.endedAt == nil,
                                 baseLane: 0,
                                 maxLane: overviewGraphPresentation.maxLane,
                                 trackMaxLane: overviewGraphPresentation.maxLane,
@@ -298,7 +302,8 @@ extension TraceViewerGraph {
         let globalColumnByTimelineID = Dictionary(
             uniqueKeysWithValues: orderedIDs.enumerated().map { ($1, $0) }
         )
-        let sessionEndColumn = max(orderedIDs.count - 1, 0)
+        let hasVisibleActiveStore = visibleStoreTraces.contains { $0.endedAt == nil }
+        let sessionEndColumn = max(orderedIDs.count - 1, 0) + (hasVisibleActiveStore ? 1 : 0)
 
         let allStoreTraces = traceSession.storeTraces.filter { localDataByStoreID[$0.id] != nil }
         let storeLayouts: [StoreLayout] = allStoreTraces.compactMap { storeTrace in
@@ -395,16 +400,34 @@ extension TraceViewerGraph {
                     )
                 }
                 let columns = timelineIDs.compactMap { globalColumnByTimelineID[$0] }
-                guard let startColumn = columns.min(), let eventEndColumn = columns.max() else {
-                    return nil
+                let startColumn = columns.min()
+                    ?? inferredStartColumn(
+                        for: layout.storeTrace.startedAt ?? layout.firstDate,
+                        orderedIDs: orderedIDs,
+                        itemsByID: itemsByID,
+                        sessionEndColumn: sessionEndColumn
+                    )
+                let eventEndColumn = columns.max()
+                let endColumn: Int
+                if layout.storeTrace.endedAt == nil {
+                    endColumn = sessionEndColumn
                 }
-                let endColumn = layout.storeTrace.endedAt == nil ? sessionEndColumn : eventEndColumn
+                else {
+                    endColumn = eventEndColumn
+                        ?? inferredEndColumn(
+                            for: layout.storeTrace.endedAt ?? layout.lastDate,
+                            orderedIDs: orderedIDs,
+                            itemsByID: itemsByID,
+                            fallbackColumn: startColumn
+                        )
+                }
                 return .init(
                     id: layout.storeTrace.id,
                     storeInstanceID: layout.storeTrace.id,
                     storeName: layout.storeTrace.displayName,
                     startColumn: startColumn,
                     endColumn: endColumn,
+                    extendsToTrailingEdge: layout.storeTrace.endedAt == nil,
                     baseLane: baseLane,
                     maxLane: baseLane + layout.commitGraphLayout.maxLane,
                     trackMaxLane: trackMaxLane,
@@ -1142,7 +1165,10 @@ extension TraceViewerGraph {
         let visibleMaxLane = visibleNodes.map(\.lane).max() ?? overviewGraphMaxLane
 
         return .init(
-            columns: buildOverviewColumns(nodes: visibleNodes),
+            columns: buildOverviewColumns(
+                nodes: visibleNodes,
+                minimumColumnCount: maxTrackEndColumn(trackRows: trackRows) + 1
+            ),
             nodeByID: Dictionary(uniqueKeysWithValues: visibleNodes.map { ($0.id, $0) }),
             selectableNodeIDs: visibleNodes.compactMap { node in
                 guard let selectionTimelineID = node.selectionTimelineID,
@@ -1166,9 +1192,16 @@ extension TraceViewerGraph {
     }
 
     static func buildOverviewColumns(
-        nodes: [TraceViewerGraph.OverviewGraphNode]
+        nodes: [TraceViewerGraph.OverviewGraphNode],
+        minimumColumnCount: Int = 0
     ) -> [TraceViewerGraph.OverviewColumn] {
-        let maxColumn = nodes.map(\.column).max() ?? 0
+        let maxColumn = max(
+            nodes.map(\.column).max() ?? -1,
+            max(minimumColumnCount - 1, -1)
+        )
+        guard maxColumn >= 0 else {
+            return []
+        }
         let nodesByColumn = Dictionary(grouping: nodes, by: \.column)
         let nodeByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         let nodeIndexByID = Dictionary(uniqueKeysWithValues: nodes.enumerated().map { ($1.id, $0) })
@@ -1192,6 +1225,49 @@ extension TraceViewerGraph {
                 edgePieces: edgePiecesByColumn[column] ?? []
             )
         }
+    }
+
+    private static func maxTrackEndColumn(
+        trackRows: [TraceViewerGraph.TrackRow]
+    ) -> Int {
+        trackRows
+            .flatMap(\.segments)
+            .map(\.endColumn)
+            .max() ?? -1
+    }
+
+    private static func inferredStartColumn(
+        for startDate: Date?,
+        orderedIDs: [String],
+        itemsByID: [String: TraceViewer.TimelineItem],
+        sessionEndColumn: Int
+    ) -> Int {
+        guard !orderedIDs.isEmpty else { return 0 }
+        guard let startDate else { return 0 }
+        for (index, id) in orderedIDs.enumerated() {
+            guard let date = itemsByID[id]?.date else { continue }
+            if date >= startDate {
+                return index
+            }
+        }
+        return sessionEndColumn
+    }
+
+    private static func inferredEndColumn(
+        for endDate: Date?,
+        orderedIDs: [String],
+        itemsByID: [String: TraceViewer.TimelineItem],
+        fallbackColumn: Int
+    ) -> Int {
+        guard !orderedIDs.isEmpty else { return fallbackColumn }
+        guard let endDate else { return fallbackColumn }
+        for (index, id) in orderedIDs.enumerated().reversed() {
+            guard let date = itemsByID[id]?.date else { continue }
+            if date <= endDate {
+                return max(index, fallbackColumn)
+            }
+        }
+        return fallbackColumn
     }
 
     private static func buildOverviewEdgePieces(

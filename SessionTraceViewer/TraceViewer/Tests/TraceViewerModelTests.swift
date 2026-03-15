@@ -72,8 +72,281 @@ extension ModelTests.TraceViewerModelTests {
         let state = TraceViewer.StoreState(traceSession: traceSession)
 
         XCTAssertEqual(
-            state.storeLayers.map(\.displayName),
+            state.storeLayers().map(\.displayName),
             ["Alpha Store", "Beta Store", "Gamma Store"]
+        )
+    }
+
+    @Test
+    func testStoreLayerMetadataUsesDurationAndEventCount() async throws {
+        let traceCollection = try await makeStateFromGeneratedTrace().traceCollection
+        let traceSession = TraceSession(
+            sessionID: "store-layer-metadata-duration",
+            title: "Store Layer Metadata Duration",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "alpha.s1",
+                    storeName: "Alpha Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endedAt: Date(timeIntervalSince1970: 255),
+                    traceCollection: traceCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+        let alphaLayer = try XCTUnwrap(state.storeLayers().first(where: { $0.id == "alpha.s1" }))
+        let expectedEventCount = TraceViewer.TimelineData(
+            traceCollection: traceCollection,
+            storeInstanceID: "alpha.s1",
+            storeName: "Alpha Store"
+        ).orderedIDs.count
+        let expectedEventCountText = expectedEventCount == 1
+            ? "1 event"
+            : "\(expectedEventCount) events"
+
+        XCTAssertEqual(alphaLayer.statusText, "2m, 35s")
+        XCTAssertEqual(alphaLayer.eventCount, expectedEventCount)
+        XCTAssertEqual(alphaLayer.eventCountText, expectedEventCountText)
+        XCTAssertEqual(alphaLayer.metadataText, "2m, 35s • \(expectedEventCountText)")
+    }
+
+    @Test
+    func testActiveEmptyStoreLayerMetadataShowsActiveAndNoEvents() throws {
+        let emptyCollection = SessionTraceCollection(
+            title: "Empty Store",
+            sessionGraph: .init(
+                storeInstanceID: .init(rawValue: "empty.s1"),
+                nodes: [],
+                edges: []
+            )
+        )
+        let traceSession = TraceSession(
+            sessionID: "store-layer-metadata-active",
+            title: "Store Layer Metadata Active",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "empty.s1",
+                    storeName: "Empty Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endedAt: nil,
+                    traceCollection: emptyCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+        let emptyLayer = try XCTUnwrap(state.storeLayers().first(where: { $0.id == "empty.s1" }))
+
+        XCTAssertEqual(emptyLayer.statusText, "Active")
+        XCTAssertEqual(emptyLayer.eventCount, 0)
+        XCTAssertEqual(emptyLayer.eventCountText, "no events")
+        XCTAssertEqual(emptyLayer.metadataText, "Active • no events")
+    }
+
+    @Test
+    func testStoreLayerShowsDistinctChildKeyOnSeparateLine() throws {
+        let emptyCollection = SessionTraceCollection(
+            title: "Empty Store",
+            sessionGraph: .init(
+                storeInstanceID: .init(rawValue: "empty.s1"),
+                nodes: [],
+                edges: []
+            )
+        )
+        let traceSession = TraceSession(
+            sessionID: "store-layer-child-key-visible",
+            title: "Store Layer Child Key Visible",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "Feature.RootStore.s1",
+                    storeName: "Root Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    traceCollection: emptyCollection
+                ),
+                .init(
+                    storeInstanceID: "Feature.DetailStore.s2",
+                    storeName: "Detail Store",
+                    parentStoreInstanceID: "Feature.RootStore.s1",
+                    childKeyInParentStore: "detail",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 110),
+                    traceCollection: emptyCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+        let detailLayer = try XCTUnwrap(state.storeLayers().first(where: { $0.id == "Feature.DetailStore.s2" }))
+
+        XCTAssertEqual(detailLayer.childKeyLineText, "as detail")
+        XCTAssertEqual(detailLayer.metadataText, "Active • no events")
+    }
+
+    @Test
+    func testStoreLayerHidesChildKeyLineWhenKeyMatchesDefaultStateStoreChildKey() throws {
+        let emptyCollection = SessionTraceCollection(
+            title: "Empty Store",
+            sessionGraph: .init(
+                storeInstanceID: .init(rawValue: "empty.s1"),
+                nodes: [],
+                edges: []
+            )
+        )
+        let traceSession = TraceSession(
+            sessionID: "store-layer-child-key-hidden",
+            title: "Store Layer Child Key Hidden",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "Feature.RootStore.s1",
+                    storeName: "Root Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    traceCollection: emptyCollection
+                ),
+                .init(
+                    storeInstanceID: "SyncUpForm.s2",
+                    storeName: "SyncUpForm 2",
+                    parentStoreInstanceID: "Feature.RootStore.s1",
+                    childKeyInParentStore: "StateStore<SyncUpForm>",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 110),
+                    traceCollection: emptyCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+        let detailLayer = try XCTUnwrap(state.storeLayers().first(where: { $0.id == "SyncUpForm.s2" }))
+
+        XCTAssertNil(detailLayer.childKeyLineText)
+    }
+
+    @Test
+    func testStoreLayerRootsReflectParentChildRelationships() async throws {
+        let traceSession = try await makeHierarchicalTraceSessionForTests()
+        let state = TraceViewer.StoreState(traceSession: traceSession)
+
+        XCTAssertEqual(
+            state.storeLayerRoots().map(\.displayName),
+            ["Root Store", "Independent Store"]
+        )
+        XCTAssertEqual(
+            state.storeLayerRoots().first?.children.map(\.displayName),
+            ["Child Store A", "Child Store B"]
+        )
+        XCTAssertEqual(
+            state.storeLayerRoots().first?.children.first?.children.map(\.displayName),
+            ["Grandchild Store"]
+        )
+        XCTAssertEqual(
+            state.storeLayers().map(\.displayName),
+            [
+                "Root Store",
+                "Child Store A",
+                "Grandchild Store",
+                "Child Store B",
+                "Independent Store"
+            ]
+        )
+    }
+
+    @Test
+    func testSettingParentVisibilityAppliesToEntireStoreSubtree() async throws {
+        let traceSession = try await makeHierarchicalTraceSessionForTests()
+        var state = TraceViewer.StoreState(traceSession: traceSession)
+        let rootStoreID = "root.s1"
+        let affectedStoreIDs = Set(["root.s1", "child.a.s2", "grandchild.s3", "child.b.s4"])
+        let unaffectedStoreID = "independent.s5"
+
+        state.setStoreVisibility(id: rootStoreID, isVisible: false)
+
+        XCTAssertFalse(
+            state.storeLayers()
+                .filter { affectedStoreIDs.contains($0.id) }
+                .contains(where: { $0.isVisible })
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == unaffectedStoreID })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set([unaffectedStoreID])
+        )
+
+        state.setStoreVisibility(id: rootStoreID, isVisible: true)
+
+        XCTAssertFalse(
+            state.storeLayers()
+                .filter { affectedStoreIDs.contains($0.id) }
+                .contains(where: { !$0.isVisible })
+        )
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set(traceSession.storeTraces.map(\.id))
+        )
+    }
+
+    @Test
+    func testShowOnlyStoreKeepsOnlyTargetStoreVisibleInTimelineAndGraph() async throws {
+        let traceSession = try await makeHierarchicalTraceSessionForTests()
+        var state = TraceViewer.StoreState(traceSession: traceSession)
+
+        state.showOnlyStore(id: "child.a.s2")
+
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set(["child.a.s2"])
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "root.s1" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "child.a.s2" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "grandchild.s3" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "child.b.s4" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "independent.s5" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            Set(
+                state.viewerData.graphTrackRows
+                    .flatMap(\.segments)
+                    .map(\.storeInstanceID)
+            ),
+            Set(["child.a.s2"])
         )
     }
 
@@ -165,7 +438,7 @@ extension ModelTests.TraceViewerModelTests {
         XCTAssertEqual(state.viewerData.orderedIDs, hiddenOrderedIDs)
         XCTAssertEqual(state.contentVersion, hiddenContentVersion)
         XCTAssertEqual(
-            state.storeLayers.first(where: { $0.id == alphaStoreID })?.isVisible,
+            state.storeLayers().first(where: { $0.id == alphaStoreID })?.isVisible,
             false
         )
     }
@@ -321,6 +594,102 @@ extension ModelTests.TraceViewerModelTests {
             "Test fixture must keep later session activity after Alpha Store's last event."
         )
         XCTAssertEqual(alphaSegment.endColumn, sessionEndColumn)
+    }
+
+    @Test
+    func testSingleActiveStoreAddsTrailingColumnForOpenSegment() async throws {
+        let traceSession = TraceSession(
+            sessionID: "single-active-store",
+            title: "Single Active Store",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "alpha.s1",
+                    storeName: "Alpha Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endedAt: nil,
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                )
+            ]
+        )
+
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let graphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        guard let alphaSegment = graphState.presentation.trackRows
+            .flatMap(\.segments)
+            .first(where: { $0.storeInstanceID == "alpha.s1" }) else {
+            XCTFail("Expected Alpha Store segment in single-store graph.")
+            return
+        }
+
+        let alphaVisibleIndices = traceViewerState.viewerData.orderedIDs.enumerated().compactMap { index, id in
+            traceViewerState.viewerData.itemsByID[id]?.storeInstanceID == "alpha.s1" ? index : nil
+        }
+
+        guard let alphaLastEventColumn = alphaVisibleIndices.max() else {
+            XCTFail("Expected Alpha Store events in single-store timeline.")
+            return
+        }
+
+        XCTAssertEqual(graphState.presentation.columns.count, alphaLastEventColumn + 2)
+        XCTAssertEqual(alphaSegment.endColumn, alphaLastEventColumn + 1)
+        XCTAssertTrue(alphaSegment.extendsToTrailingEdge)
+    }
+
+    @Test
+    func testSingleActiveStoreWithoutEventsStillHasOpenSegment() async throws {
+        let emptyCollection = SessionTraceCollection(
+            title: "Empty Store",
+            sessionGraph: .init(
+                storeInstanceID: .init(rawValue: "empty.s1"),
+                nodes: [],
+                edges: []
+            )
+        )
+        let traceSession = TraceSession(
+            sessionID: "single-empty-active-store",
+            title: "Single Empty Active Store",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "empty.s1",
+                    storeName: "Empty Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endedAt: nil,
+                    traceCollection: emptyCollection
+                )
+            ]
+        )
+
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let graphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        guard let segment = graphState.presentation.trackRows
+            .flatMap(\.segments)
+            .first(where: { $0.storeInstanceID == "empty.s1" }) else {
+            XCTFail("Expected open segment for active store without events.")
+            return
+        }
+
+        XCTAssertEqual(graphState.presentation.columns.count, 2)
+        XCTAssertEqual(segment.startColumn, 0)
+        XCTAssertEqual(segment.endColumn, 1)
+        XCTAssertTrue(segment.extendsToTrailingEdge)
     }
 
     @Test

@@ -112,23 +112,7 @@ struct TraceSessionDocumentView: View {
             Divider()
 
             ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(traceViewerStore.state.storeLayers) { storeLayer in
-                        TraceSessionStoreRow(
-                            storeLayer: storeLayer,
-                            setVisibility: { isVisible in
-                                traceViewerStore.send(
-                                    .mutating(
-                                        .setStoreVisibility(
-                                            id: storeLayer.id,
-                                            isVisible: isVisible
-                                        )
-                                    )
-                                )
-                            }
-                        )
-                    }
-                }
+                TraceViewer.StoreLayersOutlineView(store: traceViewerStore)
                 .padding(.vertical, 4)
             }
             .background(ViewerTheme.timelinePanelBackground)
@@ -211,7 +195,7 @@ struct TraceSessionDocumentView: View {
             configLine = "Configure `LiveTraceConfig.shared`"
         }
 
-        return "\(configLine), enable `store.logConfig.liveTraceEnabled = true` in the traced app, and keep this document open."
+        return "\(configLine), set `LiveTraceConfig.shared.traceAllStores = true` or enable `store.logConfig.liveTraceEnabled = .selfAndChildren` in the traced app, and keep this document open."
     }
 
     private var saveActions: TraceSessionDocumentSaveActions {
@@ -253,41 +237,5 @@ struct TraceSessionDocumentView: View {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-}
-
-private struct TraceSessionStoreRow: View {
-    let storeLayer: TraceViewer.StoreLayer
-    let setVisibility: (Bool) -> Void
-
-    private var visibilitySymbolName: String {
-        storeLayer.isVisible ? "eye" : "eye.slash"
-    }
-
-    var body: some View {
-        Button(action: {
-            setVisibility(!storeLayer.isVisible)
-        }) {
-            HStack(spacing: 8) {
-                Text(storeLayer.displayName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(ViewerTheme.primaryText)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                Image(systemName: visibilitySymbolName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(storeLayer.isVisible ? ViewerTheme.primaryText : ViewerTheme.secondaryText)
-                    .frame(width: 28, height: 28)
-            }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(storeLayer.isVisible ? "Hide Store" : "Show Store")
     }
 }
