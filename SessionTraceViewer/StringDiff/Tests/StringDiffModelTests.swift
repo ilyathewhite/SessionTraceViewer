@@ -175,4 +175,73 @@ extension ModelTests.StringDiffModelTests {
         XCTAssertEqual(store.state.selectedDiffIndex, 0)
         XCTAssertEqual(store.state.selectedDiffID, store.state.diffHunks[0].id)
     }
+
+    @Test
+    func testStringDiffFileMergeArgumentsUseExplicitSideFlags() {
+        let oldFileURL = URL(fileURLWithPath: "/tmp/old.txt")
+        let newFileURL = URL(fileURLWithPath: "/tmp/new.txt")
+
+        XCTAssertEqual(
+            StringDiff.fileMergeArguments(
+                oldFileURL: oldFileURL,
+                newFileURL: newFileURL
+            ),
+            [
+                "-left",
+                oldFileURL.path,
+                "-right",
+                newFileURL.path
+            ]
+        )
+    }
+
+    @Test
+    func testStringDiffLaunchResolvedFileMergeLaunchesExecutable() {
+        let oldFileURL = URL(fileURLWithPath: "/tmp/old.txt")
+        let newFileURL = URL(fileURLWithPath: "/tmp/new.txt")
+        let executableURL = URL(fileURLWithPath: "/Applications/Xcode.app/Contents/Applications/FileMerge.app/Contents/MacOS/FileMerge")
+
+        var launchedExecutableURL: URL?
+        var launchedArguments: [String]?
+
+        let didLaunch = StringDiff.launchResolvedFileMerge(
+            oldFileURL: oldFileURL,
+            newFileURL: newFileURL,
+            executableURL: executableURL,
+            launchFileMergeExecutable: { executableURL, arguments in
+                launchedExecutableURL = executableURL
+                launchedArguments = arguments
+            }
+        )
+
+        XCTAssertTrue(didLaunch)
+        XCTAssertEqual(launchedExecutableURL, executableURL)
+        XCTAssertEqual(
+            launchedArguments,
+            StringDiff.fileMergeArguments(
+                oldFileURL: oldFileURL,
+                newFileURL: newFileURL
+            )
+        )
+    }
+
+    @Test
+    func testStringDiffLaunchResolvedFileMergeReturnsFalseWhenLaunchFails() {
+        struct FileMergeLaunchFailed: Error {}
+
+        let oldFileURL = URL(fileURLWithPath: "/tmp/old.txt")
+        let newFileURL = URL(fileURLWithPath: "/tmp/new.txt")
+        let executableURL = URL(fileURLWithPath: "/Applications/Xcode.app/Contents/Applications/FileMerge.app/Contents/MacOS/FileMerge")
+
+        let didLaunch = StringDiff.launchResolvedFileMerge(
+            oldFileURL: oldFileURL,
+            newFileURL: newFileURL,
+            executableURL: executableURL,
+            launchFileMergeExecutable: { _, _ in
+                throw FileMergeLaunchFailed()
+            }
+        )
+
+        XCTAssertFalse(didLaunch)
+    }
 }

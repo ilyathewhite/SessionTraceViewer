@@ -575,6 +575,21 @@ func eventInspectorSyncActions(
     }
 }
 
+func eventInspectorActions(
+    in effect: EventInspector.Store.Effect
+) -> [EventInspector.Store.Action] {
+    switch effect {
+    case .action(let action, _):
+        return [action]
+    case .actions(let actions, _):
+        return actions
+    case .none:
+        return []
+    default:
+        return []
+    }
+}
+
 func containsResetTimelineListFocusAction(in effect: TraceViewerList.Store.SyncEffect) -> Bool {
     timelineActions(in: effect).contains { action in
         if case .effect(.resetTimelineListFocus) = action {
@@ -632,11 +647,17 @@ func syncsSelectedLiveTraceViewer(in effect: LiveTrace.Store.SyncEffect) -> Bool
     }
 }
 
-func makeEventInspectorEnv() -> EventInspector.StoreEnvironment {
+func makeEventInspectorEnv(
+    syncInlineDiff: @escaping @MainActor (StringDiff.Input?) -> Void = { _ in },
+    openDiffWindow: @escaping @MainActor (StringDiff.Input) -> Void = { _ in },
+    openExternalDiff: @escaping @MainActor (StringDiff.Input) -> Bool = { _ in true },
+    openValueWindow: @escaping @MainActor (EventInspector.ValueWindowInput) -> Void = { _ in }
+) -> EventInspector.StoreEnvironment {
     .init(
-        syncInlineDiff: { _ in },
-        openDiffWindow: { _ in },
-        openValueWindow: { _ in }
+        syncInlineDiff: syncInlineDiff,
+        openDiffWindow: openDiffWindow,
+        openExternalDiff: openExternalDiff,
+        openValueWindow: openValueWindow
     )
 }
 

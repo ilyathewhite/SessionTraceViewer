@@ -5,6 +5,7 @@
 //  Created by Codex on 3/2/26.
 //
 
+import AppKit
 import Foundation
 
 extension StringDiff {
@@ -31,7 +32,7 @@ extension StringDiff {
     static func windowStore(input: Input) -> Store {
         store(input: input, diffSections: .notStarted)
     }
-    
+
     typealias DiffLine = StoreState.DiffLine
     typealias DiffRow = StoreState.DiffRow
     typealias DiffSection = StoreState.DiffSection
@@ -40,6 +41,18 @@ extension StringDiff {
         case equal(oldLineNumber: Int, newLineNumber: Int, text: String)
         case delete(oldLineNumber: Int, text: String)
         case insert(newLineNumber: Int, text: String)
+    }
+
+    @MainActor
+    @discardableResult
+    static func openExternalDiff(input: Input) -> Bool {
+        do {
+            let fileURLs = try makeExternalDiffFileURLs(input: input)
+            return launchExternalDiff(oldFileURL: fileURLs.old, newFileURL: fileURLs.new)
+        }
+        catch {
+            return false
+        }
     }
 
     static func makeDiffSections(string1: String, string2: String) -> [DiffSection] {
@@ -112,6 +125,144 @@ extension StringDiff {
 
         guard !Task.isCancelled else { return [] }
         return sections
+    }
+
+    private static func makeExternalDiffFileURLs(
+        input: Input
+    ) throws -> (old: URL, new: URL) {
+        let fileManager = FileManager.default
+        let directoryURL = fileManager.temporaryDirectory
+            .appendingPathComponent("SessionTraceViewer", isDirectory: true)
+            .appendingPathComponent(
+                "\(sanitizedExternalDiffName(input.title, fallback: "Diff"))-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try fileManager.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+
+        let oldFileURL = directoryURL.appendingPathComponent(
+            "\(sanitizedExternalDiffName(input.string1Caption, fallback: "Old Value")).txt"
+        )
+        let newFileURL = directoryURL.appendingPathComponent(
+            "\(sanitizedExternalDiffName(input.string2Caption, fallback: "New Value")).txt"
+        )
+
+        try input.string1.write(to: oldFileURL, atomically: true, encoding: .utf8)
+        try input.string2.write(to: newFileURL, atomically: true, encoding: .utf8)
+
+        return (old: oldFileURL, new: newFileURL)
+    }
+
+    private static func launchExternalDiff(
+        oldFileURL: URL,
+        newFileURL: URL
+    ) -> Bool {
+        guard let applicationURL = fileMergeApplicationURL(),
+              let executableURL = Bundle(url: applicationURL)?.executableURL else {
+            return false
+        }
+
+        return launchResolvedFileMerge(
+            oldFileURL: oldFileURL,
+            newFileURL: newFileURL,
+            executableURL: executableURL,
+            launchFileMergeExecutable: launchFileMergeExecutable(executableURL:arguments:)
+        )
+    }
+
+    static func fileMergeArguments(
+        oldFileURL: URL,
+        newFileURL: URL
+    ) -> [String] {
+        [
+            "-left",
+            oldFileURL.path,
+            "-right",
+            newFileURL.path
+        ]
+    }
+
+    static func launchResolvedFileMerge(
+        oldFileURL: URL,
+        newFileURL: URL,
+        executableURL: URL,
+        launchFileMergeExecutable: (URL, [String]) throws -> Void
+    ) -> Bool {
+        do {
+            try launchFileMergeExecutable(
+                executableURL,
+                fileMergeArguments(
+                    oldFileURL: oldFileURL,
+                    newFileURL: newFileURL
+                )
+            )
+            return true
+        }
+        catch {
+            return false
+        }
+    }
+
+    private static func launchFileMergeExecutable(
+        executableURL: URL,
+        arguments: [String]
+    ) throws {
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = arguments
+        try process.run()
+    }
+
+    private static func fileMergeApplicationURL() -> URL? {
+        let applicationURLs = [
+            fileMergeApplicationURLFromWorkspace(),
+            fileMergeApplicationURLFromDeveloperDirectory(),
+            URL(fileURLWithPath: "/Applications/Xcode.app/Contents/Applications/FileMerge.app"),
+            URL(fileURLWithPath: "/Applications/Xcode-beta.app/Contents/Applications/FileMerge.app")
+        ]
+        .compactMap { $0 }
+
+        for applicationURL in applicationURLs {
+            if FileManager.default.fileExists(atPath: applicationURL.path) {
+                return applicationURL
+            }
+        }
+
+        return nil
+    }
+
+    private static func fileMergeApplicationURLFromWorkspace() -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: fileMergeBundleIdentifier)
+    }
+
+    private static let fileMergeBundleIdentifier = "com.apple.FileMerge"
+
+    private static func fileMergeApplicationURLFromDeveloperDirectory() -> URL? {
+        guard let developerDirectory = ProcessInfo.processInfo.environment["DEVELOPER_DIR"] else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: developerDirectory)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Applications", isDirectory: true)
+            .appendingPathComponent("FileMerge.app", isDirectory: true)
+    }
+
+    private static func sanitizedExternalDiffName(
+        _ value: String,
+        fallback: String
+    ) -> String {
+        let allowedCharacters = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: "-_ ")
+        )
+        let parts = value.components(separatedBy: allowedCharacters.inverted)
+            .filter { !$0.isEmpty }
+        let sanitized = parts.joined(separator: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: " .-"))
+        return sanitized.isEmpty ? fallback : sanitized
     }
 
     private static func plainAttributedString(for string: String) -> AttributedString {

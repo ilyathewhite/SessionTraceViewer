@@ -16,6 +16,7 @@ enum EventInspector: StoreNamespace {
     struct StoreEnvironment {
         let syncInlineDiff: @MainActor (_ input: StringDiff.Input?) -> Void
         let openDiffWindow: @MainActor (_ input: StringDiff.Input) -> Void
+        let openExternalDiff: @MainActor (_ input: StringDiff.Input) -> Bool
         let openValueWindow: @MainActor (_ input: ValueWindowInput) -> Void
     }
 
@@ -39,6 +40,7 @@ enum EventInspector: StoreNamespace {
         case inspectValue(rowID: String)
         case syncInlineDiff(StringDiff.Input?)
         case openDiffWindow(StringDiff.Input)
+        case openExternalDiff(StringDiff.Input)
         case openValueWindow(ValueWindowInput)
     }
 
@@ -126,6 +128,12 @@ enum EventInspector: StoreNamespace {
 }
 
 extension EventInspector {
+    enum DiffPresentation: Sendable, Equatable {
+        case inline
+        case window
+        case fileMerge
+    }
+
     @MainActor
     static func store(selection: Selection) -> Store {
         Store(.init(selection: selection), env: nil)
@@ -163,16 +171,24 @@ extension EventInspector {
                 newValue: change.newValue
             )
 
-            if shouldPresentDiffInline(change: change) {
+            switch diffPresentation(for: change) {
+            case .inline:
                 let nextRowID = state.inlineDiffRowID == rowID ? nil : rowID
                 let nextInput = state.inlineDiffRowID == rowID ? nil : input
                 return .action(.mutating(.setInlineDiff(rowID: nextRowID, input: nextInput)))
-            }
 
-            return .actions([
-                .mutating(.setInlineDiff(rowID: nil, input: nil)),
-                .effect(.openDiffWindow(input))
-            ])
+            case .window:
+                return .actions([
+                    .mutating(.setInlineDiff(rowID: nil, input: nil)),
+                    .effect(.openDiffWindow(input))
+                ])
+
+            case .fileMerge:
+                return .actions([
+                    .mutating(.setInlineDiff(rowID: nil, input: nil)),
+                    .effect(.openExternalDiff(input))
+                ])
+            }
 
         case .inspectValue(let rowID):
             guard let row = state.row(forID: rowID),
@@ -198,6 +214,10 @@ extension EventInspector {
             env.openDiffWindow(input)
             return .none
 
+        case .openExternalDiff(let input):
+            guard !env.openExternalDiff(input) else { return .none }
+            return .action(.effect(.openDiffWindow(input)))
+
         case .openValueWindow(let input):
             env.openValueWindow(input)
             return .none
@@ -205,16 +225,59 @@ extension EventInspector {
     }
 
     static func shouldPresentDiffInline(change: EventInspectorFormatter.ValueChange) -> Bool {
-        let maxLineCount = 4
-        let maxCombinedCharacterCount = 280
+        diffPresentation(for: change) == .inline
+    }
 
-        return lineCount(of: change.oldValue) <= maxLineCount
-            && lineCount(of: change.newValue) <= maxLineCount
-            && (change.oldValue.count + change.newValue.count) <= maxCombinedCharacterCount
+    static func diffPresentation(
+        for change: EventInspectorFormatter.ValueChange
+    ) -> DiffPresentation {
+        let maxInlineLineCount = 4
+        let maxInlineCombinedCharacterCount = 280
+        let maxWindowLineCount = 400
+        let maxWindowCombinedCharacterCount = 32_000
+        let maxWindowLineComparisonCellCount = 120_000
+        let maxWindowLongestLineCharacterCount = 8_000
+
+        let oldLineCount = lineCount(of: change.oldValue)
+        let newLineCount = lineCount(of: change.newValue)
+        let combinedCharacterCount = change.oldValue.count + change.newValue.count
+
+        if oldLineCount <= maxInlineLineCount,
+           newLineCount <= maxInlineLineCount,
+           combinedCharacterCount <= maxInlineCombinedCharacterCount {
+            return .inline
+        }
+
+        let comparisonCellCount = oldLineCount.multipliedReportingOverflow(by: newLineCount)
+        if comparisonCellCount.overflow {
+            return .fileMerge
+        }
+
+        let longestLineCharacterCount = max(
+            longestLineCharacterCount(in: change.oldValue),
+            longestLineCharacterCount(in: change.newValue)
+        )
+
+        if oldLineCount > maxWindowLineCount
+            || newLineCount > maxWindowLineCount
+            || combinedCharacterCount > maxWindowCombinedCharacterCount
+            || comparisonCellCount.partialValue > maxWindowLineComparisonCellCount
+            || longestLineCharacterCount > maxWindowLongestLineCharacterCount {
+            return .fileMerge
+        }
+
+        return .window
     }
 
     private static func lineCount(of value: String) -> Int {
         max(value.split(separator: "\n", omittingEmptySubsequences: false).count, 1)
+    }
+
+    private static func longestLineCharacterCount(in value: String) -> Int {
+        value
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(\.count)
+            .max() ?? value.count
     }
 
     private static func isStateItem(_ item: TraceViewer.TimelineItem) -> Bool {

@@ -95,6 +95,100 @@ extension ModelTests.EventInspectorModelTests {
         )
 
         XCTAssertFalse(EventInspector.shouldPresentDiffInline(change: largeChange))
+        XCTAssertEqual(EventInspector.diffPresentation(for: largeChange), .window)
+    }
+
+    @Test
+    func testEventInspectorTreatsVeryLargeDiffsAsFileMergeContent() {
+        let oldValue = (1...500).map { "old line \($0)" }.joined(separator: "\n")
+        let newValue = (1...500).map { "new line \($0)" }.joined(separator: "\n")
+        let largeChange = EventInspectorFormatter.ValueChange(
+            oldValue: oldValue,
+            newValue: newValue
+        )
+
+        XCTAssertEqual(EventInspector.diffPresentation(for: largeChange), .fileMerge)
+    }
+
+    @Test
+    func testEventInspectorInspectDiffUsesFileMergeForVeryLargeChanges() {
+        let oldValue = (1...500).map { "old line \($0)" }.joined(separator: "\n")
+        let newValue = (1...500).map { "new line \($0)" }.joined(separator: "\n")
+        let expectedInput = StringDiff.input(
+            title: "payload",
+            oldValue: oldValue,
+            newValue: newValue
+        )
+        var inspectorState = EventInspector.StoreState(
+            selection: .init(
+                item: nil,
+                previousStateItem: nil
+            )
+        )
+        inspectorState.valueRows = [
+            .init(
+                id: "payload",
+                property: "payload",
+                value: newValue,
+                isChanged: true,
+                change: .init(
+                    oldValue: oldValue,
+                    newValue: newValue
+                ),
+                inlinePreviewLineLimit: 3,
+                showsTruncationInPreview: true
+            )
+        ]
+
+        let effect = EventInspector.runEffect(
+            makeEventInspectorEnv(),
+            inspectorState,
+            .inspectDiff(rowID: "payload")
+        )
+        let actions = eventInspectorActions(in: effect)
+
+        XCTAssertEqual(actions.count, 2)
+        guard case .mutating(.setInlineDiff(let rowID, let input), _, _) = actions[0] else {
+            return XCTFail("Expected the first action to clear inline diff state, got \(actions[0]).")
+        }
+        XCTAssertNil(rowID)
+        XCTAssertNil(input)
+
+        guard case .effect(.openExternalDiff(let input)) = actions[1] else {
+            return XCTFail("Expected very large diff to open FileMerge, got \(actions[1]).")
+        }
+        XCTAssertEqual(input, expectedInput)
+    }
+
+    @Test
+    func testEventInspectorExternalDiffFallsBackToWindowWhenLaunchFails() {
+        let input = StringDiff.input(
+            title: "payload",
+            oldValue: "old value",
+            newValue: "new value"
+        )
+
+        let effect = EventInspector.runEffect(
+            makeEventInspectorEnv(openExternalDiff: { _ in false }),
+            .init(
+                selection: .init(
+                    item: nil,
+                    previousStateItem: nil
+                )
+            ),
+            .openExternalDiff(input)
+        )
+
+        switch effect {
+        case .action(let action, _):
+            guard case .effect(.openDiffWindow(let fallbackInput)) = action else {
+                return XCTFail("Expected failed FileMerge launch to fall back to the window diff, got \(action).")
+            }
+            XCTAssertEqual(fallbackInput, input)
+
+        default:
+            XCTFail("Expected failed FileMerge launch to fall back to the window diff, got \(effect).")
+        }
     }
 
     @Test

@@ -74,6 +74,7 @@ extension EventInspector: StoreUINamespace {
                             value: input
                         )
                     },
+                    openExternalDiff: StringDiff.openExternalDiff,
                     openValueWindow: { input in
                         openWindow(
                             id: EventInspector.valueWindowID,
