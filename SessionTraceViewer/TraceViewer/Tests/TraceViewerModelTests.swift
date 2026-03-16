@@ -1383,6 +1383,32 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
+    func testSyncScheduledEffectFanOutBatchIsHiddenInOverviewGraph() async throws {
+        let state = try await makeStateFromSyncScheduledEffectsTrace()
+
+        let fanOutBatchIDs = state.itemsByID.values.compactMap { item -> String? in
+            guard case .batch(let batch) = item.node,
+                  batch.kind == .syncFanOut else {
+                return nil
+            }
+            return batch.id.rawValue
+        }
+
+        XCTAssertFalse(fanOutBatchIDs.isEmpty, "Expected a sync fan-out batch in the test trace.")
+
+        for batchID in fanOutBatchIDs {
+            XCTAssertNil(
+                state.overviewGraphNodeByID[batchID],
+                "Sync fan-out batch \(batchID) should not render as an overview node."
+            )
+            XCTAssertFalse(
+                state.overviewGraphNodes.contains { $0.predecessorIDs.contains(batchID) },
+                "Overview edges should not target hidden sync fan-out batch \(batchID)."
+            )
+        }
+    }
+
+    @Test
     func testSyncScheduledEffectActionsUseDistinctLanesBottomToTop() async throws {
         let state = try await makeStateFromSyncScheduledEffectsTrace()
 

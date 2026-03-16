@@ -209,6 +209,25 @@ extension TraceViewerGraph.StoreState {
 extension TraceViewerGraph {
     private static let trackLaneGap = 1
 
+    static func isHiddenOverviewNode(
+        _ item: TraceViewer.TimelineItem
+    ) -> Bool {
+        guard case .batch(let batch) = item.node else {
+            return false
+        }
+        return batch.kind == .syncFanOut
+    }
+
+    static func visibleOverviewOrderedIDs(
+        from orderedIDs: [String],
+        itemsByID: [String: TraceViewer.TimelineItem]
+    ) -> [String] {
+        orderedIDs.filter { id in
+            guard let item = itemsByID[id] else { return false }
+            return !isHiddenOverviewNode(item)
+        }
+    }
+
     static func buildSource(
         traceSession: TraceSession,
         visibleStoreTraces: [TraceSession.StoreTrace],
@@ -295,11 +314,15 @@ extension TraceViewerGraph {
         let storeOrderByID = Dictionary(
             uniqueKeysWithValues: visibleStoreTraces.enumerated().map { ($1.id, $0) }
         )
+        let overviewOrderedIDs = visibleOverviewOrderedIDs(
+            from: orderedIDs,
+            itemsByID: itemsByID
+        )
         let globalColumnByTimelineID = Dictionary(
-            uniqueKeysWithValues: orderedIDs.enumerated().map { ($1, $0) }
+            uniqueKeysWithValues: overviewOrderedIDs.enumerated().map { ($1, $0) }
         )
         let hasVisibleActiveStore = visibleStoreTraces.contains { $0.endedAt == nil }
-        let sessionEndColumn = max(orderedIDs.count - 1, 0) + (hasVisibleActiveStore ? 1 : 0)
+        let sessionEndColumn = max(overviewOrderedIDs.count - 1, 0) + (hasVisibleActiveStore ? 1 : 0)
 
         let allStoreTraces = traceSession.storeTraces.filter { localDataByStoreID[$0.id] != nil }
         let storeLayouts: [StoreLayout] = allStoreTraces.compactMap { storeTrace in
@@ -398,7 +421,7 @@ extension TraceViewerGraph {
                 let startColumn = columns.min()
                     ?? inferredStartColumn(
                         for: layout.storeTrace.startedAt ?? layout.firstDate,
-                        orderedIDs: orderedIDs,
+                        orderedIDs: overviewOrderedIDs,
                         itemsByID: itemsByID,
                         sessionEndColumn: sessionEndColumn
                     )
@@ -411,7 +434,7 @@ extension TraceViewerGraph {
                     endColumn = eventEndColumn
                         ?? inferredEndColumn(
                             for: layout.storeTrace.endedAt ?? layout.lastDate,
-                            orderedIDs: orderedIDs,
+                            orderedIDs: overviewOrderedIDs,
                             itemsByID: itemsByID,
                             fallbackColumn: startColumn
                         )
@@ -439,6 +462,7 @@ extension TraceViewerGraph {
                 let lineKindByPredecessorID = layout.commitGraphLayout.edgeLineKindByPredecessorID
                 for localID in layout.timelineData.orderedIDs {
                     guard let item = layout.timelineData.itemsByID[localID] else { continue }
+                    guard !isHiddenOverviewNode(item) else { continue }
                     let globalID = TraceViewer.scopedTimelineID(
                         storeInstanceID: layout.storeTrace.id,
                         localNodeID: localID
@@ -588,6 +612,12 @@ extension TraceViewerGraph {
                 .effectID.rawValue ?? ""
         }
         .filter { !$0.value.isEmpty }
+
+        let hiddenOverviewNodeIDs = Set(
+            itemsByID.compactMap { pair in
+                isHiddenOverviewNode(pair.value) ? pair.key : nil
+            }
+        )
 
         for item in itemsByID.values {
             switch item.node {
@@ -885,7 +915,7 @@ extension TraceViewerGraph {
             return predecessorIDs.uniqued()
         }
 
-        let visibleNodeIDs = Set(itemsByID.keys)
+        let visibleNodeIDs = Set(itemsByID.keys).subtracting(hiddenOverviewNodeIDs)
         var predecessorAliasByHiddenNodeID: [String: String] = [:]
         for edge in graph.edges {
             switch edge {
@@ -897,6 +927,12 @@ extension TraceViewerGraph {
             default:
                 break
             }
+        }
+
+        for hiddenNodeID in hiddenOverviewNodeIDs {
+            guard predecessorAliasByHiddenNodeID[hiddenNodeID] == nil else { continue }
+            guard let aliasID = causalPredecessors(for: hiddenNodeID).first else { continue }
+            predecessorAliasByHiddenNodeID[hiddenNodeID] = aliasID
         }
 
         func resolveVisibleNodeID(_ id: String) -> String? {
@@ -1076,9 +1112,11 @@ extension TraceViewerGraph {
         maxTimelineLane: Int,
         storeInstanceID: String
     ) -> TraceViewerGraph.StoreState.OverviewGraphPresentation {
-        let knownGraphNodeIDs = Set(orderedTimelineIDs)
+        let knownGraphNodeIDs = Set(
+            visibleOverviewOrderedIDs(from: orderedTimelineIDs, itemsByID: itemsByID)
+        )
         var nodes: [TraceViewerGraph.OverviewGraphNode] = []
-        nodes.reserveCapacity(orderedTimelineIDs.count)
+        nodes.reserveCapacity(knownGraphNodeIDs.count)
         var nodeByID: [String: TraceViewerGraph.OverviewGraphNode] = [:]
         var graphIDByTimelineID: [String: String] = [:]
         var columnByTimelineID: [String: Int] = [:]
@@ -1087,6 +1125,23 @@ extension TraceViewerGraph {
 
         for timelineID in orderedTimelineIDs {
             guard let item = itemsByID[timelineID] else { continue }
+            if isHiddenOverviewNode(item) {
+                let hiddenColumn: Int = {
+                    if let anchorID = sharedColumnAnchorByID[timelineID],
+                       let anchorColumn = columnByTimelineID[anchorID] {
+                        return anchorColumn + 1
+                    }
+                    let predecessorColumns = (predecessorIDsByTimelineID[timelineID] ?? [])
+                        .compactMap { columnByTimelineID[$0] }
+                    if let predecessorColumn = predecessorColumns.max() {
+                        return predecessorColumn
+                    }
+                    return max(nextColumn - 1, 0)
+                }()
+                columnByTimelineID[timelineID] = hiddenColumn
+                continue
+            }
+
             let kind: TraceViewerGraph.OverviewGraphNode.Kind = {
                 switch item.kind {
                 case .state:
