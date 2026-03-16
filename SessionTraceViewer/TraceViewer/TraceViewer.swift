@@ -13,10 +13,16 @@ enum TraceViewer: StoreNamespace {
     typealias StoreEnvironment = Never
     typealias EffectAction = Never
 
+    enum DefaultStoreVisibility: Equatable {
+        case allVisible
+        case firstCreatedOnly
+    }
+
     enum MutatingAction {
         case replaceTraceSession(TraceSession)
         case replaceTraceCollection(SessionTraceCollection)
         case setStoreVisibility(id: String, isVisible: Bool)
+        case showStore(id: String, additively: Bool)
         case showOnlyStore(id: String)
         case toggleStoreVisibility(id: String)
     }
@@ -200,6 +206,7 @@ enum TraceViewer: StoreNamespace {
     }
 
     struct StoreState {
+        let defaultStoreVisibility: DefaultStoreVisibility
         var traceSession: TraceSession
         var storeVisibilityByID: [String: Bool]
         var sessionData: SessionData
@@ -212,13 +219,28 @@ enum TraceViewer: StoreNamespace {
 
 extension TraceViewer {
     @MainActor
-    static func store(traceSession: TraceSession) -> Store {
-        Store(.init(traceSession: traceSession), env: nil)
+    static func store(
+        traceSession: TraceSession,
+        defaultStoreVisibility: DefaultStoreVisibility = .allVisible
+    ) -> Store {
+        Store(
+            .init(
+                traceSession: traceSession,
+                defaultStoreVisibility: defaultStoreVisibility
+            ),
+            env: nil
+        )
     }
 
     @MainActor
-    static func store(traceCollection: SessionTraceCollection) -> Store {
-        store(traceSession: traceSession(from: traceCollection))
+    static func store(
+        traceCollection: SessionTraceCollection,
+        defaultStoreVisibility: DefaultStoreVisibility = .allVisible
+    ) -> Store {
+        store(
+            traceSession: traceSession(from: traceCollection),
+            defaultStoreVisibility: defaultStoreVisibility
+        )
     }
 
     @MainActor
@@ -234,6 +256,10 @@ extension TraceViewer {
 
         case .setStoreVisibility(let id, let isVisible):
             state.setStoreVisibility(id: id, isVisible: isVisible)
+            return .none
+
+        case .showStore(let id, let additively):
+            state.showStore(id: id, additively: additively)
             return .none
 
         case .showOnlyStore(let id):

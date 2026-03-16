@@ -41,7 +41,10 @@ struct TraceSessionDocumentView: View {
         _document = document
         self.fileURL = fileURL
         _traceViewerStore = StateObject(
-            wrappedValue: TraceViewer.store(traceSession: document.wrappedValue.session)
+            wrappedValue: TraceViewer.store(
+                traceSession: document.wrappedValue.session,
+                defaultStoreVisibility: .firstCreatedOnly
+            )
         )
         _recordingController = StateObject(
             wrappedValue: .init(document: document.wrappedValue)

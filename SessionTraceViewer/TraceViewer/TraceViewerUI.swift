@@ -5,6 +5,7 @@
 //  Created by Ilya Belenkiy on 2/25/26.
 //
 
+import AppKit
 import ReducerArchitecture
 import SwiftUI
 
@@ -241,14 +242,7 @@ extension TraceViewer: StoreUINamespace {
                     ) {
                         toggleExpansion(for: entry.storeLayer)
                     } toggleVisibility: {
-                        store.send(
-                            .mutating(
-                                .setStoreVisibility(
-                                    id: entry.storeLayer.id,
-                                    isVisible: !entry.storeLayer.isVisible
-                                )
-                            )
-                        )
+                        handleVisibilityToggle(for: entry.storeLayer)
                     } isolateStore: {
                         store.send(
                             .mutating(
@@ -322,6 +316,33 @@ extension TraceViewer: StoreUINamespace {
                 }
                 return [storeLayer.id] + descendantIDs
             }
+        }
+
+        private func handleVisibilityToggle(for storeLayer: TraceViewer.StoreLayer) {
+            if storeLayer.isVisible {
+                store.send(
+                    .mutating(
+                        .setStoreVisibility(
+                            id: storeLayer.id,
+                            isVisible: false
+                        )
+                    )
+                )
+            }
+            else {
+                store.send(
+                    .mutating(
+                        .showStore(
+                            id: storeLayer.id,
+                            additively: currentEventHasCommandModifier
+                        )
+                    )
+                )
+            }
+        }
+
+        private var currentEventHasCommandModifier: Bool {
+            NSApp.currentEvent?.modifierFlags.contains(.command) == true
         }
     }
 
@@ -431,8 +452,8 @@ extension TraceViewer: StoreUINamespace {
                         systemName: storeLayer.isVisible ? "eye" : "eyebrow",
                         fallbackSystemName: storeLayer.isVisible ? nil : "eye.slash",
                         helpText: storeLayer.isVisible
-                            ? "Hide Store Subtree"
-                            : "Show Store Subtree",
+                            ? "Hide Store"
+                            : "Show Store (Command-click to add)",
                         action: toggleVisibility
                     )
                 }

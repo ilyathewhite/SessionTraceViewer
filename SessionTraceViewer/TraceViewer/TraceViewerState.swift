@@ -13,7 +13,6 @@ extension TraceViewer.StoreState {
         let orderedStoreTraces: [TraceSession.StoreTrace]
         let timelineDataByStoreID: [String: TraceViewer.TimelineData]
         let childrenByParentID: [String: [TraceSession.StoreTrace]]
-        let descendantIDsByStoreID: [String: Set<String>]
         let rootStoreTraces: [TraceSession.StoreTrace]
         let childKeyLineTextByStoreID: [String: String]
         let statusTextByStoreID: [String: String]
@@ -52,25 +51,6 @@ extension TraceViewer.StoreState {
                 parentStoreIDByStoreID[$0.id] == nil
             }
 
-            var descendantIDsByStoreID: [String: Set<String>] = [:]
-            func descendantIDs(of storeID: String) -> Set<String> {
-                if let cached = descendantIDsByStoreID[storeID] {
-                    return cached
-                }
-
-                var collectedDescendantIDs: Set<String> = []
-                for childStoreTrace in childrenByParentID[storeID] ?? [] {
-                    collectedDescendantIDs.insert(childStoreTrace.id)
-                    collectedDescendantIDs.formUnion(descendantIDs(of: childStoreTrace.id))
-                }
-                descendantIDsByStoreID[storeID] = collectedDescendantIDs
-                return collectedDescendantIDs
-            }
-
-            for storeTrace in orderedStoreTraces {
-                _ = descendantIDs(of: storeTrace.id)
-            }
-
             var childKeyLineTextByStoreID: [String: String] = [:]
             var statusTextByStoreID: [String: String] = [:]
             var eventCountByStoreID: [String: Int] = [:]
@@ -95,7 +75,6 @@ extension TraceViewer.StoreState {
             self.orderedStoreTraces = orderedStoreTraces
             self.timelineDataByStoreID = timelineDataByStoreID
             self.childrenByParentID = childrenByParentID
-            self.descendantIDsByStoreID = descendantIDsByStoreID
             self.rootStoreTraces = rootStoreTraces
             self.childKeyLineTextByStoreID = childKeyLineTextByStoreID
             self.statusTextByStoreID = statusTextByStoreID
@@ -204,12 +183,18 @@ extension TraceViewer.StoreState {
         }
     }
 
-    init(traceSession: TraceSession) {
-        let storeVisibilityByID = Dictionary(
-            uniqueKeysWithValues: traceSession.storeTraces.map { ($0.id, true) }
-        )
+    init(
+        traceSession: TraceSession,
+        defaultStoreVisibility: TraceViewer.DefaultStoreVisibility = .allVisible
+    ) {
         let sessionData = SessionData(traceSession: traceSession)
+        let storeVisibilityByID = Self.makeDefaultStoreVisibilityByID(
+            for: traceSession,
+            sessionData: sessionData,
+            defaultStoreVisibility: defaultStoreVisibility
+        )
 
+        self.defaultStoreVisibility = defaultStoreVisibility
         self.traceSession = traceSession
         self.storeVisibilityByID = storeVisibilityByID
         self.sessionData = sessionData
@@ -236,9 +221,17 @@ extension TraceViewer.StoreState {
 
         self.traceSession = traceSession
         self.sessionData = .init(traceSession: traceSession)
+        let defaultVisibilityByID = Self.makeDefaultStoreVisibilityByID(
+            for: traceSession,
+            sessionData: sessionData,
+            defaultStoreVisibility: defaultStoreVisibility
+        )
         var nextVisibilityByID: [String: Bool] = [:]
         for storeTrace in traceSession.storeTraces {
-            nextVisibilityByID[storeTrace.id] = previousVisibilityByID[storeTrace.id] ?? true
+            nextVisibilityByID[storeTrace.id] =
+                previousVisibilityByID[storeTrace.id]
+                ?? defaultVisibilityByID[storeTrace.id]
+                ?? false
         }
         storeVisibilityByID = nextVisibilityByID
         rebuildViewerData()
@@ -247,16 +240,11 @@ extension TraceViewer.StoreState {
 
     mutating func setStoreVisibility(id: String, isVisible: Bool) {
         guard let currentVisibility = storeVisibilityByID[id] else { return }
-        let affectedStoreIDs = sessionData.descendantIDsByStoreID[id, default: []]
-            .union([id])
-        guard currentVisibility != isVisible
-                || affectedStoreIDs.contains(where: { storeVisibilityByID[$0] != isVisible }) else {
+        guard currentVisibility != isVisible else {
             return
         }
 
-        for affectedStoreID in affectedStoreIDs {
-            storeVisibilityByID[affectedStoreID] = isVisible
-        }
+        storeVisibilityByID[id] = isVisible
         rebuildViewerData()
         rebuildStoreLayerCache()
     }
@@ -264,6 +252,17 @@ extension TraceViewer.StoreState {
     mutating func toggleStoreVisibility(id: String) {
         guard let currentVisibility = storeVisibilityByID[id] else { return }
         setStoreVisibility(id: id, isVisible: !currentVisibility)
+    }
+
+    mutating func showStore(id: String, additively: Bool) {
+        guard let isVisible = storeVisibilityByID[id], !isVisible else { return }
+
+        if additively {
+            setStoreVisibility(id: id, isVisible: true)
+        }
+        else {
+            showOnlyStore(id: id)
+        }
     }
 
     mutating func showOnlyStore(id: String) {
@@ -293,6 +292,29 @@ extension TraceViewer.StoreState {
     private func flattenStoreLayers(_ storeLayers: [TraceViewer.StoreLayer]) -> [TraceViewer.StoreLayer] {
         storeLayers.flatMap { storeLayer in
             [storeLayer] + flattenStoreLayers(storeLayer.children)
+        }
+    }
+
+    private static func makeDefaultStoreVisibilityByID(
+        for traceSession: TraceSession,
+        sessionData: SessionData,
+        defaultStoreVisibility: TraceViewer.DefaultStoreVisibility
+    ) -> [String: Bool] {
+        switch defaultStoreVisibility {
+        case .allVisible:
+            return Dictionary(
+                uniqueKeysWithValues: traceSession.storeTraces.map { ($0.id, true) }
+            )
+
+        case .firstCreatedOnly:
+            guard let firstCreatedStoreID = sessionData.orderedStoreTraces.first?.id else {
+                return [:]
+            }
+            return Dictionary(
+                uniqueKeysWithValues: traceSession.storeTraces.map {
+                    ($0.id, $0.id == firstCreatedStoreID)
+                }
+            )
         }
     }
 

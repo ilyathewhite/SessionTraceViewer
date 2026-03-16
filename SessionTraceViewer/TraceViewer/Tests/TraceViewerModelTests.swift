@@ -78,6 +78,65 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
+    func testFirstCreatedOnlyVisibilityModeShowsEarliestStoreByStartedAt() async throws {
+        let traceSession = TraceSession(
+            sessionID: "first-created-only-ordering",
+            title: "First Created Only Ordering",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "gamma.s3",
+                    storeName: "Gamma Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 140),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                ),
+                .init(
+                    storeInstanceID: "alpha.s1",
+                    storeName: "Alpha Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                ),
+                .init(
+                    storeInstanceID: "beta.s2",
+                    storeName: "Beta Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 105),
+                    traceCollection: try await makeStateFromGeneratedTrace().traceCollection
+                )
+            ]
+        )
+
+        let state = TraceViewer.StoreState(
+            traceSession: traceSession,
+            defaultStoreVisibility: .firstCreatedOnly
+        )
+
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set(["alpha.s1"])
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "alpha.s1" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "beta.s2" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "gamma.s3" })?.isVisible,
+            false
+        )
+    }
+
+    @Test
     func testStoreLayerMetadataUsesDurationAndEventCount() async throws {
         let traceCollection = try await makeStateFromGeneratedTrace().traceCollection
         let traceSession = TraceSession(
@@ -273,39 +332,159 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSettingParentVisibilityAppliesToEntireStoreSubtree() async throws {
+    func testSettingStoreVisibilityOnlyAffectsTargetStore() async throws {
         let traceSession = try await makeHierarchicalTraceSessionForTests()
         var state = TraceViewer.StoreState(traceSession: traceSession)
         let rootStoreID = "root.s1"
-        let affectedStoreIDs = Set(["root.s1", "child.a.s2", "grandchild.s3", "child.b.s4"])
-        let unaffectedStoreID = "independent.s5"
 
         state.setStoreVisibility(id: rootStoreID, isVisible: false)
 
-        XCTAssertFalse(
-            state.storeLayers()
-                .filter { affectedStoreIDs.contains($0.id) }
-                .contains(where: { $0.isVisible })
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == rootStoreID })?.isVisible,
+            false
         )
         XCTAssertEqual(
-            state.storeLayers().first(where: { $0.id == unaffectedStoreID })?.isVisible,
+            state.storeLayers().first(where: { $0.id == "child.a.s2" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "grandchild.s3" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "child.b.s4" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "independent.s5" })?.isVisible,
             true
         )
         XCTAssertEqual(
             Set(state.viewerData.visibleStoreTraces.map(\.id)),
-            Set([unaffectedStoreID])
+            Set(["child.a.s2", "grandchild.s3", "child.b.s4", "independent.s5"])
+        )
+
+        state.setStoreVisibility(id: "child.a.s2", isVisible: false)
+
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "child.a.s2" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "grandchild.s3" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set(["grandchild.s3", "child.b.s4", "independent.s5"])
         )
 
         state.setStoreVisibility(id: rootStoreID, isVisible: true)
 
-        XCTAssertFalse(
-            state.storeLayers()
-                .filter { affectedStoreIDs.contains($0.id) }
-                .contains(where: { !$0.isVisible })
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == rootStoreID })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "child.a.s2" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "grandchild.s3" })?.isVisible,
+            true
+        )
+    }
+
+    @Test
+    func testReplacingTraceSessionInFirstCreatedOnlyModePreservesExistingChoicesAndHidesNewStores() async throws {
+        let fullTraceSession = try await makeCombinedTraceSessionForTests()
+        let initialTraceSession = TraceSession(
+            sessionID: fullTraceSession.sessionID,
+            title: fullTraceSession.title,
+            hostName: fullTraceSession.hostName,
+            processName: fullTraceSession.processName,
+            startedAt: fullTraceSession.startedAt,
+            storeTraces: Array(fullTraceSession.storeTraces.prefix(2))
+        )
+        var state = TraceViewer.StoreState(
+            traceSession: initialTraceSession,
+            defaultStoreVisibility: .firstCreatedOnly
+        )
+        let betaStoreID = "beta.s2"
+        let gammaStoreID = "gamma.s3"
+
+        state.setStoreVisibility(id: betaStoreID, isVisible: true)
+        state.replaceTraceSession(fullTraceSession)
+
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "alpha.s1" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == betaStoreID })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == gammaStoreID })?.isVisible,
+            false
         )
         XCTAssertEqual(
             Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set(["alpha.s1", betaStoreID])
+        )
+    }
+
+    @Test
+    func testShowingHiddenStoreWithoutAdditiveModeHidesOtherStores() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var state = TraceViewer.StoreState(traceSession: traceSession)
+        let betaStoreID = "beta.s2"
+
+        state.setStoreVisibility(id: betaStoreID, isVisible: false)
+        state.showStore(id: betaStoreID, additively: false)
+
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
+            Set([betaStoreID])
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "alpha.s1" })?.isVisible,
+            false
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == betaStoreID })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "gamma.s3" })?.isVisible,
+            false
+        )
+    }
+
+    @Test
+    func testShowingHiddenStoreAdditivelyPreservesOtherVisibleStores() async throws {
+        let traceSession = try await makeCombinedTraceSessionForTests()
+        var state = TraceViewer.StoreState(traceSession: traceSession)
+        let betaStoreID = "beta.s2"
+
+        state.setStoreVisibility(id: betaStoreID, isVisible: false)
+        state.showStore(id: betaStoreID, additively: true)
+
+        XCTAssertEqual(
+            Set(state.viewerData.visibleStoreTraces.map(\.id)),
             Set(traceSession.storeTraces.map(\.id))
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "alpha.s1" })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == betaStoreID })?.isVisible,
+            true
+        )
+        XCTAssertEqual(
+            state.storeLayers().first(where: { $0.id == "gamma.s3" })?.isVisible,
+            true
         )
     }
 
