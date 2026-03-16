@@ -38,6 +38,65 @@ extension ModelTests.TraceSessionDocumentModelTests {
         XCTAssertEqual(document.recordingMode, .staticTrace)
         XCTAssertEqual(document.session, session)
     }
+
+    @Test
+    func testRecordingDocumentUpdatesSavedSnapshotWithoutStopping() {
+        var document = TraceSessionDocument()
+        let session = TraceSession.placeholder(
+            title: "Recorded Session",
+            sessionID: "recorded.session"
+        )
+
+        document.updateRecordingSnapshot(with: session)
+
+        XCTAssertTrue(document.isRecording)
+        XCTAssertEqual(document.session, session)
+        if case .recording(let port) = document.recordingMode {
+            XCTAssertEqual(port, LiveTraceDefaults.defaultPort)
+        }
+        else {
+            XCTFail("Expected the document to remain in recording mode while syncing snapshots.")
+        }
+    }
+
+    @Test
+    func testStaticDocumentIgnoresRecordingSnapshotUpdates() {
+        let session = TraceSession.placeholder(
+            title: "Saved Session",
+            sessionID: "saved.session"
+        )
+        var document = TraceSessionDocument(loadedSession: session)
+
+        document.updateRecordingSnapshot(
+            with: .placeholder(
+                title: "Unexpected Recording Session",
+                sessionID: "unexpected.recording.session"
+            )
+        )
+
+        XCTAssertFalse(document.isRecording)
+        XCTAssertEqual(document.session, session)
+    }
+
+    @Test
+    func testTraceSessionDocumentWritesOnlyLZMAContentType() {
+        XCTAssertEqual(
+            TraceSessionDocument.writableContentTypes,
+            [.sessionTraceLZMA]
+        )
+    }
+
+    @Test
+    func testTraceSessionDocumentSuggestedFilenameStripsTrailingLZMAExtension() {
+        XCTAssertEqual(
+            TraceSessionDocument.suggestedFilename(from: "TraceSession.lzma"),
+            "TraceSession"
+        )
+        XCTAssertEqual(
+            TraceSessionDocument.suggestedFilename(from: "TraceSession"),
+            "TraceSession"
+        )
+    }
 }
 
 enum TestTraceFeature: StoreNamespace {

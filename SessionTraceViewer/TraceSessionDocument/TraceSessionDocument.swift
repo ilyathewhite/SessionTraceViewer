@@ -12,7 +12,7 @@ import ReducerArchitecture
 
 extension UTType {
     static var sessionTraceLZMA: UTType {
-        UTType(filenameExtension: "lzma") ?? .data
+        UTType(exportedAs: "reducer-architecture.session-trace")
     }
 }
 
@@ -25,6 +25,14 @@ struct TraceSessionDocument: FileDocument {
 
     static var readableContentTypes: [UTType] {
         [.sessionTraceLZMA, .data]
+    }
+
+    static var writableContentTypes: [UTType] {
+        [.sessionTraceLZMA]
+    }
+
+    static var preferredFilenameExtension: String {
+        UTType.sessionTraceLZMA.preferredFilenameExtension ?? "lzma"
     }
 
     var session: TraceSession
@@ -63,9 +71,22 @@ struct TraceSessionDocument: FileDocument {
         return true
     }
 
+    mutating func updateRecordingSnapshot(with session: TraceSession) {
+        guard isRecording else { return }
+        self.session = session
+    }
+
     mutating func markRecordingStopped(with session: TraceSession) {
         self.session = session
         recordingMode = .stopped
+    }
+
+    static func suggestedFilename(from filename: String) -> String {
+        let suffix = ".\(preferredFilenameExtension)"
+        guard filename.lowercased().hasSuffix(suffix) else {
+            return filename
+        }
+        return String(filename.dropLast(suffix.count))
     }
 }
 

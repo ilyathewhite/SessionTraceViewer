@@ -113,7 +113,9 @@ extension LiveTrace: StoreUINamespace {
                     traceViewerStore: traceViewerStore,
                     saveSession: {
                         exportDocument = .init(session: session.traceSession)
-                        exportDefaultFilename = session.exportFilename
+                        exportDefaultFilename = TraceSessionDocument.suggestedFilename(
+                            from: session.exportFilename
+                        )
                         isExportingSession = true
                     }
                 )

@@ -71,6 +71,9 @@ struct TraceSessionDocumentView: View {
             recordingController.startIfNeeded()
             syncTraceViewer()
         }
+        .onChange(of: recordingController.session) { _, session in
+            document.updateRecordingSnapshot(with: session)
+        }
         .onChange(of: displaySession) { _, _ in
             syncTraceViewer()
         }
