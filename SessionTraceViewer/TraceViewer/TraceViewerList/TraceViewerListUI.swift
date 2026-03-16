@@ -79,6 +79,7 @@ extension TraceViewerList: StoreUINamespace {
                 .onMoveCommand(perform: handleMove)
                 .onAppear {
                     timelineListScrollCoordinator.install(proxy: proxy)
+                    timelineListHasFocus = true
                 }
                 .onDisappear {
                     timelineListScrollCoordinator.clear()
