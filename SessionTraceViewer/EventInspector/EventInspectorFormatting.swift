@@ -20,11 +20,13 @@ enum EventInspectorFormatter {
         let value: String
         let isChanged: Bool
         let change: ValueChange?
-        let isExpandable: Bool
-        let isExpandedByDefault: Bool
+        let inlinePreviewLineLimit: Int
+        let showsTruncationInPreview: Bool
     }
 
     private static let missingValuePlaceholder = "<missing>"
+    private static let fullInlinePreviewMaxLineCount = 10
+    private static let truncatedInlinePreviewLineCount = 3
 
     static func effectSubtitle(_ effect: SessionGraph.EffectNode) -> String {
         var parts: [String] = [effect.kind.rawValue]
@@ -138,18 +140,20 @@ enum EventInspectorFormatter {
                 value: formattedValue,
                 isChanged: isChanged,
                 change: change,
-                isExpandable: isExpandableValue(formattedValue),
-                isExpandedByDefault: shouldExpandByDefault(formattedValue)
+                inlinePreviewLineLimit: inlinePreviewLineLimit(forFormattedValue: formattedValue),
+                showsTruncationInPreview: inlinePreviewShowsTruncation(
+                    forFormattedValue: formattedValue
+                )
             )
         }
     }
 
-    static func valueNeedsExpansion(_ value: String) -> Bool {
-        isExpandableValue(formattedCodeString(value))
+    static func inlinePreviewLineLimit(for value: String) -> Int {
+        inlinePreviewLineLimit(forFormattedValue: formattedCodeString(value))
     }
 
-    static func valueExpandsByDefault(_ value: String) -> Bool {
-        shouldExpandByDefault(formattedCodeString(value))
+    static func inlinePreviewShowsTruncation(for value: String) -> Bool {
+        inlinePreviewShowsTruncation(forFormattedValue: formattedCodeString(value))
     }
 
     private static func callSiteLabel(_ callSite: SessionGraph.ActionNode.CallSite?) -> String {
@@ -167,13 +171,14 @@ enum EventInspectorFormatter {
             .replacingOccurrences(of: "\\t", with: "\t")
     }
 
-    private static func isExpandableValue(_ value: String) -> Bool {
-        lineCount(of: value) > 1
+    private static func inlinePreviewLineLimit(forFormattedValue value: String) -> Int {
+        inlinePreviewShowsTruncation(forFormattedValue: value)
+            ? truncatedInlinePreviewLineCount
+            : fullInlinePreviewMaxLineCount
     }
 
-    private static func shouldExpandByDefault(_ value: String) -> Bool {
-        guard isExpandableValue(value) else { return true }
-        return lineCount(of: value) < 10
+    private static func inlinePreviewShowsTruncation(forFormattedValue value: String) -> Bool {
+        lineCount(of: value) > fullInlinePreviewMaxLineCount
     }
 
     private static func lineCount(of value: String) -> Int {

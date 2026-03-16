@@ -30,16 +30,12 @@ extension ModelTests.EventInspectorModelTests {
         )
         var inspectorState = EventInspector.StoreState(
             selection: initialSelection,
-            detailRowExpansionByID: ["details-0-captured": false],
-            valueRowExpansionByID: ["count": false],
             inlineDiffRowID: "count"
         )
 
         let effect = EventInspector.reduce(&inspectorState, .updateSelection(nextSelection))
 
         XCTAssertEqual(inspectorState.selection, nextSelection)
-        XCTAssertTrue(inspectorState.detailRowExpansionByID.isEmpty)
-        XCTAssertTrue(inspectorState.valueRowExpansionByID.isEmpty)
         XCTAssertNil(inspectorState.inlineDiffRowID)
         let actions = eventInspectorSyncActions(in: effect)
         XCTAssertEqual(actions.count, 1)
@@ -99,5 +95,70 @@ extension ModelTests.EventInspectorModelTests {
         )
 
         XCTAssertFalse(EventInspector.shouldPresentDiffInline(change: largeChange))
+    }
+
+    @Test
+    func testInlinePreviewShowsFullValueWhenTenLinesOrLess() {
+        let value = (1...10).map { "line \($0)" }.joined(separator: "\n")
+
+        XCTAssertEqual(
+            EventInspectorFormatter.inlinePreviewLineLimit(for: value),
+            10
+        )
+        XCTAssertFalse(
+            EventInspectorFormatter.inlinePreviewShowsTruncation(for: value)
+        )
+    }
+
+    @Test
+    func testInlinePreviewTruncatesWhenValueExceedsTenLines() {
+        let value = (1...11).map { "line \($0)" }.joined(separator: "\n")
+
+        XCTAssertEqual(
+            EventInspectorFormatter.inlinePreviewLineLimit(for: value),
+            3
+        )
+        XCTAssertTrue(
+            EventInspectorFormatter.inlinePreviewShowsTruncation(for: value)
+        )
+    }
+
+    @Test
+    func testEventInspectorInspectValueOpensWindowForTruncatedPreview() {
+        var inspectorState = EventInspector.StoreState(
+            selection: .init(
+                item: nil,
+                previousStateItem: nil
+            )
+        )
+        inspectorState.detailRows = [
+            .init(
+                id: "details-0-notes",
+                property: "notes",
+                value: (1...11).map { "line \($0)" }.joined(separator: "\n"),
+                isChanged: false,
+                change: nil,
+                inlinePreviewLineLimit: 3,
+                showsTruncationInPreview: true
+            )
+        ]
+
+        let effect = EventInspector.runEffect(
+            makeEventInspectorEnv(),
+            inspectorState,
+            .inspectValue(rowID: "details-0-notes")
+        )
+
+        switch effect {
+        case .action(let action, _):
+            guard case .effect(.openValueWindow(let input)) = action else {
+                return XCTFail("Expected truncated value inspection to open a value window, got \(action).")
+            }
+            XCTAssertEqual(input.title, "notes")
+            XCTAssertTrue(input.value.contains("line 11"))
+
+        default:
+            XCTFail("Expected truncated value inspection to open a value window, got \(effect).")
+        }
     }
 }

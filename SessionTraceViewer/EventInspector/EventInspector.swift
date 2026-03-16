@@ -9,11 +9,19 @@ import Foundation
 import ReducerArchitecture
 
 enum EventInspector: StoreNamespace {
+    static let valueWindowID = "event-inspector-value-window"
+
     typealias PublishedValue = Void
 
     struct StoreEnvironment {
         let syncInlineDiff: @MainActor (_ input: StringDiff.Input?) -> Void
         let openDiffWindow: @MainActor (_ input: StringDiff.Input) -> Void
+        let openValueWindow: @MainActor (_ input: ValueWindowInput) -> Void
+    }
+
+    struct ValueWindowInput: Hashable, Codable, Sendable {
+        let title: String
+        let value: String
     }
 
     struct Selection: Equatable {
@@ -23,21 +31,19 @@ enum EventInspector: StoreNamespace {
 
     enum MutatingAction {
         case updateSelection(Selection)
-        case toggleDetailRowExpansion(id: String)
-        case toggleValueRowExpansion(id: String)
         case setInlineDiff(rowID: String?, input: StringDiff.Input?)
     }
 
     enum EffectAction {
         case inspectDiff(rowID: String)
+        case inspectValue(rowID: String)
         case syncInlineDiff(StringDiff.Input?)
         case openDiffWindow(StringDiff.Input)
+        case openValueWindow(ValueWindowInput)
     }
 
     struct StoreState {
         var selection: Selection
-        var detailRowExpansionByID: [String: Bool] = [:]
-        var valueRowExpansionByID: [String: Bool] = [:]
         var inlineDiffRowID: String?
         var item: TraceViewer.TimelineItem?
         var previousStateItem: TraceViewer.TimelineItem?
@@ -48,21 +54,15 @@ enum EventInspector: StoreNamespace {
         init(selection: Selection) {
             self.init(
                 selection: selection,
-                detailRowExpansionByID: [:],
-                valueRowExpansionByID: [:],
                 inlineDiffRowID: nil
             )
         }
 
         init(
             selection: Selection,
-            detailRowExpansionByID: [String: Bool],
-            valueRowExpansionByID: [String: Bool],
             inlineDiffRowID: String?
         ) {
             self.selection = selection
-            self.detailRowExpansionByID = detailRowExpansionByID
-            self.valueRowExpansionByID = valueRowExpansionByID
             self.inlineDiffRowID = inlineDiffRowID
             self.item = nil
             self.previousStateItem = nil
@@ -80,40 +80,16 @@ enum EventInspector: StoreNamespace {
             valueRows?.first { $0.id == id }
         }
 
-        func isDetailRowExpanded(_ row: EventInspectorFormatter.ValueRow) -> Bool {
-            detailRowExpansionByID[row.id] ?? row.isExpandedByDefault
-        }
-
-        func isValueRowExpanded(_ row: EventInspectorFormatter.ValueRow) -> Bool {
-            valueRowExpansionByID[row.id] ?? row.isExpandedByDefault
+        func row(forID id: String) -> EventInspectorFormatter.ValueRow? {
+            detailRow(forID: id) ?? valueRow(forID: id)
         }
 
         mutating func updateSelection(_ selection: Selection) -> Bool {
             guard self.selection != selection else { return false }
             self.selection = selection
-            detailRowExpansionByID = [:]
-            valueRowExpansionByID = [:]
             inlineDiffRowID = nil
             refreshDerivedState()
             return true
-        }
-
-        mutating func toggleDetailRowExpansion(id: String) {
-            guard let row = detailRow(forID: id) else {
-                assertionFailure("Missing detail row \(id)")
-                return
-            }
-            let currentValue = detailRowExpansionByID[id] ?? row.isExpandedByDefault
-            detailRowExpansionByID[id] = !currentValue
-        }
-
-        mutating func toggleValueRowExpansion(id: String) {
-            guard let row = valueRow(forID: id) else {
-                assertionFailure("Missing value row \(id)")
-                return
-            }
-            let currentValue = valueRowExpansionByID[id] ?? row.isExpandedByDefault
-            valueRowExpansionByID[id] = !currentValue
         }
 
         private mutating func refreshDerivedState() {
@@ -129,8 +105,11 @@ enum EventInspector: StoreNamespace {
                         value: pair.1,
                         isChanged: false,
                         change: nil,
-                        isExpandable: EventInspectorFormatter.valueNeedsExpansion(pair.1),
-                        isExpandedByDefault: EventInspectorFormatter.valueExpandsByDefault(pair.1)
+                        inlinePreviewLineLimit: EventInspectorFormatter.inlinePreviewLineLimit(
+                            for: pair.1
+                        ),
+                        showsTruncationInPreview:
+                            EventInspectorFormatter.inlinePreviewShowsTruncation(for: pair.1)
                     )
                 }
                 valueRows = EventInspectorFormatter.valueRows(
@@ -161,14 +140,6 @@ extension EventInspector {
             if hadInlineDiff {
                 return .action(.effect(.syncInlineDiff(nil)))
             }
-            return .none
-
-        case .toggleDetailRowExpansion(let id):
-            state.toggleDetailRowExpansion(id: id)
-            return .none
-
-        case .toggleValueRowExpansion(let id):
-            state.toggleValueRowExpansion(id: id)
             return .none
 
         case .setInlineDiff(let rowID, let input):
@@ -203,12 +174,32 @@ extension EventInspector {
                 .effect(.openDiffWindow(input))
             ])
 
+        case .inspectValue(let rowID):
+            guard let row = state.row(forID: rowID),
+                  row.showsTruncationInPreview else {
+                return .none
+            }
+            return .action(
+                .effect(
+                    .openValueWindow(
+                        .init(
+                            title: row.property,
+                            value: row.value
+                        )
+                    )
+                )
+            )
+
         case .syncInlineDiff(let input):
             env.syncInlineDiff(input)
             return .none
 
         case .openDiffWindow(let input):
             env.openDiffWindow(input)
+            return .none
+
+        case .openValueWindow(let input):
+            env.openValueWindow(input)
             return .none
         }
     }

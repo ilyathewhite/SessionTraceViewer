@@ -5,6 +5,7 @@
 //  Created by Codex on 3/7/26.
 //
 
+import AppKit
 import SwiftUI
 import ReducerArchitecture
 
@@ -12,22 +13,17 @@ extension EventInspector: StoreUINamespace {
     struct ContentView: StoreContentView {
         private enum Layout {
             static let columnSpacing: CGFloat = 9
-            static let disclosureSpacing: CGFloat = 4
-            static let disclosureWidth: CGFloat = 20
-            static let disclosureHeight: CGFloat = 20
             static let separatorWidth: CGFloat = 1
             static let valueColumnPadding: CGFloat = 8
             static let rowTopPadding: CGFloat = 5
             static let rowBottomPadding: CGFloat = 5
-            static let expandableRowExtraTopPadding: CGFloat = 6
             static let rowHorizontalPadding: CGFloat = 12
             static let diffIndicatorColumnWidth: CGFloat = 16
             static let diffIndicatorTrailingPadding: CGFloat = 2
-        }
-
-        private enum InspectorCardKind {
-            case details
-            case value
+            static let truncatedValueIconSize: CGFloat = 12
+            static let truncatedValueIconTrailingPadding: CGFloat = 8
+            static let truncatedValueIconTopPadding: CGFloat = 8
+            static let truncatedValuePreviewTrailingPadding: CGFloat = 26
         }
 
         typealias Nsp = EventInspector
@@ -77,6 +73,12 @@ extension EventInspector: StoreUINamespace {
                             id: StringDiff.windowID,
                             value: input
                         )
+                    },
+                    openValueWindow: { input in
+                        openWindow(
+                            id: EventInspector.valueWindowID,
+                            value: input
+                        )
                     }
                 )
             }
@@ -104,7 +106,6 @@ extension EventInspector: StoreUINamespace {
             inspectorGridCard(
                 title: "Details",
                 rows: rows,
-                cardKind: .details,
                 onRowTap: nil
             )
         }
@@ -114,7 +115,6 @@ extension EventInspector: StoreUINamespace {
             inspectorGridCard(
                 title: "Value",
                 rows: rows,
-                cardKind: .value,
                 onRowTap: { row in
                     store.send(.effect(.inspectDiff(rowID: row.id)))
                 }
@@ -125,7 +125,6 @@ extension EventInspector: StoreUINamespace {
         private func inspectorGridCard(
             title: String,
             rows: [EventInspectorFormatter.ValueRow],
-            cardKind: InspectorCardKind,
             onRowTap: ((EventInspectorFormatter.ValueRow) -> Void)?
         ) -> some View {
             let currentInlineStringDiffStore = inlineStringDiffStore
@@ -138,20 +137,17 @@ extension EventInspector: StoreUINamespace {
 
                 Grid(alignment: .topLeading, horizontalSpacing: Layout.columnSpacing, verticalSpacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        let isExpanded = isExpanded(row, in: cardKind)
                         let showsInlineDiff = store.state.inlineDiffRowID == row.id
                             && currentInlineStringDiffStore != nil
 
                         GridRow(alignment: .top) {
-                            propertyColumn(row: row, isExpanded: isExpanded) {
-                                toggleRowExpansion(for: row, in: cardKind)
-                            }
+                            propertyColumn(row: row)
 
                             if showsDiffColumn {
                                 diffIndicatorColumn(row: row)
                             }
 
-                            valueColumn(row: row, isExpanded: isExpanded)
+                            valueColumn(row: row)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -206,35 +202,17 @@ extension EventInspector: StoreUINamespace {
         }
 
         private func propertyColumn(
-            row: EventInspectorFormatter.ValueRow,
-            isExpanded: Bool,
-            action: @escaping () -> Void
+            row: EventInspectorFormatter.ValueRow
         ) -> some View {
-            let topPadding = Layout.rowTopPadding + (row.isExpandable ? Layout.expandableRowExtraTopPadding : 0)
-
-            return HStack(alignment: .top, spacing: Layout.disclosureSpacing) {
-                if row.isExpandable {
-                    Button(action: action) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(ViewerTheme.secondaryText)
-                            .frame(width: Layout.disclosureWidth, height: Layout.disclosureHeight)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                propertyView(key: row.property)
-                    .foregroundStyle(ViewerTheme.inspectorPropertyText)
-            }
+            propertyView(key: row.property)
+                .foregroundStyle(ViewerTheme.inspectorPropertyText)
             .padding(.leading, Layout.rowHorizontalPadding)
             .padding(.trailing, Layout.rowHorizontalPadding)
-            .padding(.top, topPadding)
+            .padding(.top, Layout.rowTopPadding)
             .padding(.bottom, Layout.rowBottomPadding)
         }
 
         private func diffIndicatorColumn(row: EventInspectorFormatter.ValueRow) -> some View {
-            let topPadding = Layout.rowTopPadding + (row.isExpandable ? Layout.expandableRowExtraTopPadding : 0)
-
             return Group {
                 if row.change != nil {
                     Image(systemName: "arrow.left.arrow.right")
@@ -247,21 +225,56 @@ extension EventInspector: StoreUINamespace {
             }
             .frame(width: Layout.diffIndicatorColumnWidth)
             .padding(.trailing, Layout.diffIndicatorTrailingPadding)
-            .padding(.top, topPadding)
+            .padding(.top, Layout.rowTopPadding)
             .padding(.bottom, Layout.rowBottomPadding)
         }
 
-        private func valueColumn(
-            row: EventInspectorFormatter.ValueRow,
-            isExpanded: Bool
-        ) -> some View {
-            let topPadding = Layout.rowTopPadding + (row.isExpandable ? Layout.expandableRowExtraTopPadding : 0)
+        @ViewBuilder
+        private func valueColumn(row: EventInspectorFormatter.ValueRow) -> some View {
+            if row.showsTruncationInPreview {
+                Button {
+                    store.send(.effect(.inspectValue(rowID: row.id)))
+                } label: {
+                    tappableValuePreview(row: row)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .help("Open Full Value")
+            }
+            else {
+                valuePreview(row: row)
+            }
+        }
 
-            return valueView(value: row.value)
-                .lineLimit(isExpanded ? nil : 1)
+        private func tappableValuePreview(row: EventInspectorFormatter.ValueRow) -> some View {
+            ZStack(alignment: .topTrailing) {
+                Rectangle()
+                    .fill(.clear)
+
+                valuePreview(row: row)
+
+                Image(systemName: "arrow.down.left.and.arrow.up.right")
+                    .font(.system(size: Layout.truncatedValueIconSize, weight: .bold))
+                    .foregroundStyle(ViewerTheme.secondaryText)
+                    .padding(.top, Layout.truncatedValueIconTopPadding)
+                    .padding(.trailing, Layout.truncatedValueIconTrailingPadding)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+
+        private func valuePreview(row: EventInspectorFormatter.ValueRow) -> some View {
+            valueView(value: row.value)
+                .lineLimit(row.inlinePreviewLineLimit)
                 .truncationMode(.tail)
-                .padding(.trailing, 8)
-                .padding(.top, topPadding)
+                .padding(
+                    .trailing,
+                    row.showsTruncationInPreview
+                        ? Layout.truncatedValuePreviewTrailingPadding
+                        : 8
+                )
+                .padding(.top, Layout.rowTopPadding)
                 .padding(.bottom, Layout.rowBottomPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(alignment: .leading) {
@@ -298,28 +311,61 @@ extension EventInspector: StoreUINamespace {
                 .gridCellColumns(columnCount)
         }
 
-        private func isExpanded(
-            _ row: EventInspectorFormatter.ValueRow,
-            in cardKind: InspectorCardKind
-        ) -> Bool {
-            switch cardKind {
-            case .details:
-                return store.state.isDetailRowExpanded(row)
-            case .value:
-                return store.state.isValueRowExpanded(row)
-            }
+    }
+}
+
+extension EventInspector {
+    struct ValueWindowView: View {
+        private enum Layout {
+            static let width: CGFloat = 760
+            static let minHeight: CGFloat = 120
+            static let maxHeight: CGFloat = 720
+            static let horizontalPadding: CGFloat = 14
+            static let verticalPadding: CGFloat = 12
+            static let fontSize: CGFloat = 12
+            static let font = NSFont.monospacedSystemFont(
+                ofSize: fontSize,
+                weight: .regular
+            )
         }
 
-        private func toggleRowExpansion(
-            for row: EventInspectorFormatter.ValueRow,
-            in cardKind: InspectorCardKind
-        ) {
-            switch cardKind {
-            case .details:
-                store.send(.mutating(.toggleDetailRowExpansion(id: row.id)))
-            case .value:
-                store.send(.mutating(.toggleValueRowExpansion(id: row.id)))
+        let input: ValueWindowInput
+
+        var body: some View {
+            ScrollView {
+                Text(input.value)
+                    .font(.system(size: Layout.fontSize, weight: .regular, design: .monospaced))
+                    .foregroundStyle(ViewerTheme.primaryText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Layout.horizontalPadding)
+                    .padding(.vertical, Layout.verticalPadding)
             }
+            .frame(width: Layout.width, height: displayedHeight, alignment: .topLeading)
+            .background(ViewerTheme.sectionBackground)
+            .navigationTitle(input.title)
+        }
+
+        private var displayedHeight: CGFloat {
+            min(
+                max(Self.measuredTextHeight(for: input.value), Layout.minHeight),
+                Layout.maxHeight
+            )
+        }
+
+        private static func measuredTextHeight(for value: String) -> CGFloat {
+            let attributedString = NSAttributedString(
+                string: value.isEmpty ? " " : value,
+                attributes: [
+                    .font: Layout.font
+                ]
+            )
+            let textWidth = Layout.width - (Layout.horizontalPadding * 2)
+            let measuredRect = attributedString.boundingRect(
+                with: .init(width: textWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading]
+            )
+            return ceil(measuredRect.height) + (Layout.verticalPadding * 2)
         }
     }
 }

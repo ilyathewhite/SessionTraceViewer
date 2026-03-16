@@ -635,7 +635,8 @@ func syncsSelectedLiveTraceViewer(in effect: LiveTrace.Store.SyncEffect) -> Bool
 func makeEventInspectorEnv() -> EventInspector.StoreEnvironment {
     .init(
         syncInlineDiff: { _ in },
-        openDiffWindow: { _ in }
+        openDiffWindow: { _ in },
+        openValueWindow: { _ in }
     )
 }
 

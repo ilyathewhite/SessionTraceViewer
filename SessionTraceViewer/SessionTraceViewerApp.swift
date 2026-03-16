@@ -22,6 +22,18 @@ struct SessionTraceViewerApp: App {
             TraceSessionDocumentCommands()
         }
 
+        WindowGroup("Value", id: EventInspector.valueWindowID, for: EventInspector.ValueWindowInput.self) { input in
+            if let input = input.wrappedValue {
+                NavigationStack {
+                    EventInspector.ValueWindowView(input: input)
+                }
+            }
+            else {
+                Color.clear
+            }
+        }
+        .windowResizability(.contentSize)
+
         WindowGroup("Value Diff", id: StringDiff.windowID, for: StringDiff.Input.self) { input in
             if let input = input.wrappedValue {
                 NavigationStack {
