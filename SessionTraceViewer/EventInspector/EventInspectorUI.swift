@@ -318,9 +318,10 @@ extension EventInspector: StoreUINamespace {
 extension EventInspector {
     struct ValueWindowView: View {
         private enum Layout {
-            static let width: CGFloat = 760
+            static let minWidth: CGFloat = 420
+            static let idealWidth: CGFloat = 760
             static let minHeight: CGFloat = 120
-            static let maxHeight: CGFloat = 720
+            static let idealHeight: CGFloat = 720
             static let horizontalPadding: CGFloat = 14
             static let verticalPadding: CGFloat = 12
             static let fontSize: CGFloat = 12
@@ -342,7 +343,15 @@ extension EventInspector {
                     .padding(.horizontal, Layout.horizontalPadding)
                     .padding(.vertical, Layout.verticalPadding)
             }
-            .frame(width: Layout.width, height: displayedHeight, alignment: .topLeading)
+            .frame(
+                minWidth: Layout.minWidth,
+                idealWidth: Layout.idealWidth,
+                maxWidth: .infinity,
+                minHeight: Layout.minHeight,
+                idealHeight: displayedHeight,
+                maxHeight: .infinity,
+                alignment: .topLeading
+            )
             .background(ViewerTheme.sectionBackground)
             .navigationTitle(input.title)
         }
@@ -350,7 +359,7 @@ extension EventInspector {
         private var displayedHeight: CGFloat {
             min(
                 max(Self.measuredTextHeight(for: input.value), Layout.minHeight),
-                Layout.maxHeight
+                Layout.idealHeight
             )
         }
 
@@ -361,7 +370,7 @@ extension EventInspector {
                     .font: Layout.font
                 ]
             )
-            let textWidth = Layout.width - (Layout.horizontalPadding * 2)
+            let textWidth = Layout.idealWidth - (Layout.horizontalPadding * 2)
             let measuredRect = attributedString.boundingRect(
                 with: .init(width: textWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading]

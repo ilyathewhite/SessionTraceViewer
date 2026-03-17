@@ -32,7 +32,7 @@ struct SessionTraceViewerApp: App {
                 Color.clear
             }
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
 
         WindowGroup("Value Diff", id: StringDiff.windowID, for: StringDiff.Input.self) { input in
             if let input = input.wrappedValue {
