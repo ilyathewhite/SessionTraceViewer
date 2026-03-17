@@ -908,6 +908,63 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
+    func testCombinedGraphVisibleMaxLaneIncludesEmptyStoreTrackRow() async throws {
+        let populatedCollection = try await makeStateFromGeneratedTrace().traceCollection
+        let emptyCollection = SessionTraceCollection(
+            title: "Empty Store",
+            sessionGraph: .init(
+                storeInstanceID: .init(rawValue: "empty.s2"),
+                nodes: [],
+                edges: []
+            )
+        )
+        let traceSession = TraceSession(
+            sessionID: "combined-empty-store-track",
+            title: "Combined Empty Store Track",
+            hostName: nil,
+            processName: nil,
+            startedAt: Date(timeIntervalSince1970: 100),
+            storeTraces: [
+                .init(
+                    storeInstanceID: "alpha.s1",
+                    storeName: "Alpha Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 100),
+                    endedAt: Date(timeIntervalSince1970: 120),
+                    traceCollection: populatedCollection
+                ),
+                .init(
+                    storeInstanceID: "empty.s2",
+                    storeName: "Empty Store",
+                    hostName: nil,
+                    processName: nil,
+                    startedAt: Date(timeIntervalSince1970: 140),
+                    endedAt: Date(timeIntervalSince1970: 150),
+                    traceCollection: emptyCollection
+                )
+            ]
+        )
+
+        let traceViewerState = TraceViewer.StoreState(traceSession: traceSession)
+        let graphState = TraceViewerGraph.StoreState(
+            viewerData: traceViewerState.viewerData,
+            input: makeGraphInput(from: traceViewerState.viewerData)
+        )
+
+        guard let maxTrackLane = graphState.presentation.trackRows.map(\.maxLane).max() else {
+            XCTFail("Expected combined graph track rows.")
+            return
+        }
+
+        XCTAssertGreaterThan(
+            maxTrackLane,
+            graphState.presentation.visibleNodes.map(\.lane).max() ?? -1
+        )
+        XCTAssertEqual(graphState.presentation.visibleMaxLane, maxTrackLane)
+    }
+
+    @Test
     func testOverviewGraphKeepsStateNodesOnMainLane() async throws {
         let state = try await makeStateFromGeneratedTrace()
 

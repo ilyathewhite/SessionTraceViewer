@@ -1226,7 +1226,12 @@ extension TraceViewerGraph {
         }
         let selectedNodeID = input.selectedTimelineID.flatMap { overviewGraphIDByTimelineID[$0] }
         let selectedNode = selectedNodeID.flatMap { nodeByID[$0] }
-        let visibleMaxLane = visibleNodes.map(\.lane).max() ?? overviewGraphMaxLane
+        let visibleNodeMaxLane = visibleNodes.map(\.lane).max() ?? -1
+        let visibleTrackMaxLane = trackRows.map(\.maxLane).max() ?? -1
+        let visibleMaxLane = max(
+            visibleNodeMaxLane,
+            max(visibleTrackMaxLane, overviewGraphMaxLane)
+        )
 
         return .init(
             visibleNodes: visibleNodes,
