@@ -9,108 +9,91 @@ import SwiftUI
 import AppKit
 
 enum ViewerTheme {
-    struct SemanticFamily {
-        let base: Color
-        let graph: Color
+    private final class ThemeBundleToken: NSObject {}
+
+    private static let bundle = Bundle(for: ThemeBundleToken.self)
+
+    private static func color(_ name: String) -> Color {
+        Color("Theme/\(name)", bundle: bundle)
     }
 
-    private static func rgb(_ red: Double, _ green: Double, _ blue: Double) -> Color {
-        Color(.sRGB, red: red / 255, green: green / 255, blue: blue / 255)
-    }
+    private static let white = color("Base/White")
 
-    static let background = rgb(246, 247, 249)
+    static let background = color("Surfaces/AppBackground")
 
-    static let timelinePanelBackground = rgb(244, 246, 248)
-    static let timelineGraphBackground = Color.white
-    static let inspectorPanelBackground = rgb(240, 242, 245)
-    static let traceViewerContentBackground = rgb(238, 240, 243)
+    static let timelinePanelBackground = color("Surfaces/TimelinePanel")
+    static let timelineGraphBackground = white
+    static let inspectorPanelBackground = color("Surfaces/InspectorPanel")
+    static let traceViewerContentBackground = color("Surfaces/TraceViewerContent")
     static let traceViewerScopeBarBackground = background
     static let traceViewerInsetPanelBackground = traceViewerContentBackground
-    static let traceViewerInsetPanelInnerShadow = Color.black.opacity(0.034)
-    static let traceViewerScopeCapsuleShadow = Color.black.opacity(0.045)
-    static let timelineGuide = rgb(235, 238, 241)
-    static let solidBranchLine = rgb(154, 159, 165)
-    static let dottedBranchLine = rgb(122, 127, 133)
-    static let nodeStroke = Color.white
-    static let timestampText = rgb(122, 128, 135)
+    static let traceViewerInsetPanelInnerShadow = color("Shadows/InsetPanelInner")
+    static let traceViewerInsetPanelInnerShadowSoft = color("Shadows/InsetPanelInnerSoft")
+    static let traceViewerScopeCapsuleShadow = color("Shadows/ScopeCapsule")
+    static let timelineGuide = color("Lines/TimelineGuide")
+    static let solidBranchLine = color("Lines/SolidBranch")
+    static let dottedBranchLine = color("Lines/DottedBranch")
+    static let nodeStroke = white
+    static let timestampText = color("Text/Timestamp")
 
-    static let rowFill = Color.white
-    static let rowSelectedFill = rgb(225, 236, 251)
-    static let rowSelectedStroke = rgb(171, 197, 236)
-    static let rowInactiveSelectedFill = rgb(227, 231, 236)
-    static let rowInactiveSelectedStroke = rgb(208, 215, 223)
-    static let rowStroke = rgb(223, 227, 231)
-    static let rowTopHighlight = Color.white
-    static let rowLiftShadow = Color.black.opacity(0.035)
-    static let listItemShadow = Color.black.opacity(0.045)
-    static let detailCardShadow = Color.black.opacity(0.045)
-    static let badgeBackground = rgb(237, 240, 243)
-    static let overviewStroke = rgb(223, 227, 231)
-    static let overviewGuide = rgb(208, 222, 241)
-    static let overviewSelection = rgb(96, 151, 228)
-    static let overviewSelectionRing = rgb(154, 189, 235)
-    static let overviewSelectionDot = Color.white
-    static let overviewAreaBackground = rgb(232, 236, 241)
-    static let sectionBackground = Color.white
-    static let sectionStroke = rgb(223, 227, 231)
-    static let metricRowBackground = rgb(247, 248, 250)
-    static let valueChangedBackground = rgb(242, 245, 250)
-    static let valueChangedAccent = rgb(105, 119, 148)
-    static let diffOldHighlightBackground = rgb(255, 235, 233)
-    static let diffOldHighlightText = rgb(207, 34, 46)
-    static let diffNewHighlightBackground = rgb(218, 251, 225)
-    static let diffNewHighlightText = rgb(26, 127, 55)
+    static let rowFill = white
+    static let rowSelectedFill = color("Rows/SelectedFill")
+    static let rowSelectedStroke = color("Rows/SelectedStroke")
+    static let rowInactiveSelectedFill = color("Rows/InactiveSelectedFill")
+    static let rowInactiveSelectedStroke = color("Rows/InactiveSelectedStroke")
+    static let rowStroke = color("Rows/Stroke")
+    static let rowTopHighlight = white
+    static let rowLiftShadow = color("Shadows/RowLift")
+    static let listItemShadow = traceViewerScopeCapsuleShadow
+    static let detailCardShadow = traceViewerScopeCapsuleShadow
+    static let badgeBackground = color("Surfaces/Badge")
+    static let overviewStroke = rowStroke
+    static let overviewGuide = color("Overview/Guide")
+    static let overviewSelection = color("Overview/Selection")
+    static let overviewSelectionRing = color("Overview/SelectionRing")
+    static let overviewSelectionDot = white
+    static let overviewAreaBackground = color("Surfaces/OverviewArea")
+    static let overviewRegionBackground = color("Surfaces/OverviewRegion")
+    static let overviewRegionShadow = color("Shadows/OverviewRegion")
+    static let overviewRegionSelectedShadow = color("Shadows/OverviewRegionSelected")
+    static let sectionBackground = white
+    static let sectionStroke = rowStroke
+    static let sectionStrokeMuted = color("Lines/SectionStrokeMuted")
+    static let metricRowBackground = color("Surfaces/MetricRow")
+    static let valueChangedBackground = color("Surfaces/ValueChanged")
+    static let valueChangedAccent = color("Text/ValueChangedAccent")
+    static let diffOldHighlightBackground = color("Surfaces/DiffOldHighlight")
+    static let diffOldRowTint = color("Surfaces/DiffOldRowTint")
+    static let diffOldHighlightText = color("Text/DiffOldHighlight")
+    static let diffNewHighlightBackground = color("Surfaces/DiffNewHighlight")
+    static let diffNewRowTint = color("Surfaces/DiffNewRowTint")
+    static let diffNewHighlightText = color("Text/DiffNewHighlight")
 
-    static let stateFamily = SemanticFamily(
-        base: rgb(118, 125, 42),
-        graph: rgb(122, 134, 164)
-    )
-    static let mutationFamily = SemanticFamily(
-        base: rgb(80, 128, 87),
-        graph: rgb(108, 156, 104)
-    )
-    static let effectFamily = SemanticFamily(
-        base: rgb(178, 126, 56),
-        graph: rgb(208, 150, 76)
-    )
-    static let flowFamily = SemanticFamily(
-        base: rgb(69, 127, 130),
-        graph: rgb(90, 150, 154)
-    )
-    static let batchFamily = SemanticFamily(
-        base: rgb(136, 98, 124),
-        graph: rgb(164, 122, 150)
-    )
-    static let publishFamily = SemanticFamily(
-        base: rgb(52, 140, 128),
-        graph: rgb(72, 166, 148)
-    )
-    static let cancelFamily = SemanticFamily(
-        base: rgb(126, 132, 142),
-        graph: rgb(150, 156, 168)
-    )
+    static let flow = color("Semantic/Base/Flow")
+    static let state = color("Semantic/Base/State")
+    static let mutation = color("Semantic/Base/Mutation")
+    static let effect = color("Semantic/Base/Effect")
+    static let batch = color("Semantic/Base/Batch")
+    static let publish = color("Semantic/Base/Publish")
+    static let cancel = color("Semantic/Base/Cancel")
 
-    static let flow = flowFamily.base
-    static let state = stateFamily.base
-    static let mutation = mutationFamily.base
-    static let effect = effectFamily.base
-    static let batch = batchFamily.base
-    static let publish = publishFamily.base
-    static let cancel = cancelFamily.base
-
-    static let primaryText = Color(nsColor: .labelColor)
-    static let secondaryText = Color(nsColor: .secondaryLabelColor)
-    static let tertiaryText = Color(nsColor: .tertiaryLabelColor)
-    static let inspectorPropertyText = rgb(112, 118, 126)
-    static let scopeBarAllText = rgb(70, 76, 84)
-    static let scopeBarAllBackground = rgb(230, 234, 238)
-    static let scopeBarAllStroke = rgb(184, 191, 198)
-    static let scopeBarFlowText = rgb(22, 74, 96)
-    static let scopeBarFlowBackground = rgb(224, 238, 244)
-    static let scopeBarFlowStroke = rgb(167, 192, 204)
-    static let scopeBarUserText = rgb(70, 76, 84)
-    static let scopeBarUserBackground = rgb(230, 234, 238)
-    static let scopeBarUserStroke = rgb(184, 191, 198)
+    static let primaryText = color("Text/Primary")
+    static let primaryTextMuted = color("Text/PrimaryMuted")
+    static let secondaryText = color("Text/Secondary")
+    static let tertiaryText = color("Text/Tertiary")
+    static let inspectorPropertyText = color("Text/InspectorProperty")
+    static let scopeBarAllText = color("ScopeBar/AllText")
+    static let scopeBarAllBackground = color("ScopeBar/AllBackground")
+    static let scopeBarAllStroke = color("ScopeBar/AllStroke")
+    static let scopeBarFlowText = color("ScopeBar/FlowText")
+    static let scopeBarFlowBackground = color("ScopeBar/FlowBackground")
+    static let scopeBarFlowStroke = color("ScopeBar/FlowStroke")
+    static let scopeBarUserText = scopeBarAllText
+    static let scopeBarUserBackground = scopeBarAllBackground
+    static let scopeBarUserStroke = scopeBarAllStroke
+    static let tooltipText = white
+    static let tooltipBackground = color("Surfaces/Tooltip")
+    static let tooltipShadow = color("Shadows/Tooltip")
 
     static func color(for kind: TraceViewer.EventKind) -> Color {
         switch kind {
@@ -147,17 +130,17 @@ enum ViewerTheme {
     static func chipText(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return rgb(82, 89, 24)
+            return color("Semantic/Chip/Text/State")
         case .mutation:
-            return rgb(31, 76, 40)
+            return color("Semantic/Chip/Text/Mutation")
         case .effect:
-            return rgb(104, 68, 20)
+            return color("Semantic/Chip/Text/Effect")
         case .batch:
-            return rgb(78, 52, 75)
+            return color("Semantic/Chip/Text/Batch")
         case .publish:
-            return rgb(18, 79, 70)
+            return color("Semantic/Chip/Text/Publish")
         case .cancel:
-            return rgb(68, 74, 84)
+            return color("Semantic/Chip/Text/Cancel")
         }
     }
 
@@ -179,34 +162,34 @@ enum ViewerTheme {
     static func graphColor(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return stateFamily.graph
+            return color("Semantic/Graph/State")
         case .mutation:
-            return mutationFamily.graph
+            return color("Semantic/Graph/Mutation")
         case .effect:
-            return effectFamily.graph
+            return color("Semantic/Graph/Effect")
         case .batch:
-            return batchFamily.graph
+            return color("Semantic/Graph/Batch")
         case .publish:
-            return publishFamily.graph
+            return color("Semantic/Graph/Publish")
         case .cancel:
-            return cancelFamily.graph
+            return color("Semantic/Graph/Cancel")
         }
     }
 
     static func chipBackground(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return rgb(242, 245, 220)
+            return color("Semantic/Chip/Background/State")
         case .mutation:
-            return rgb(232, 241, 233)
+            return color("Semantic/Chip/Background/Mutation")
         case .effect:
-            return rgb(246, 238, 227)
+            return color("Semantic/Chip/Background/Effect")
         case .batch:
-            return rgb(240, 233, 238)
+            return color("Semantic/Chip/Background/Batch")
         case .publish:
-            return rgb(230, 243, 240)
+            return color("Semantic/Chip/Background/Publish")
         case .cancel:
-            return rgb(236, 238, 241)
+            return color("Semantic/Chip/Background/Cancel")
         }
     }
 
@@ -228,17 +211,17 @@ enum ViewerTheme {
     static func chipStroke(for kind: TraceViewer.EventColorKind) -> Color {
         switch kind {
         case .state:
-            return rgb(194, 200, 142)
+            return color("Semantic/Chip/Stroke/State")
         case .mutation:
-            return rgb(176, 196, 180)
+            return color("Semantic/Chip/Stroke/Mutation")
         case .effect:
-            return rgb(208, 190, 164)
+            return color("Semantic/Chip/Stroke/Effect")
         case .batch:
-            return rgb(192, 178, 188)
+            return color("Semantic/Chip/Stroke/Batch")
         case .publish:
-            return rgb(170, 198, 191)
+            return color("Semantic/Chip/Stroke/Publish")
         case .cancel:
-            return rgb(188, 191, 197)
+            return color("Semantic/Chip/Stroke/Cancel")
         }
     }
 
@@ -338,7 +321,7 @@ struct ViewerInsetPanelModifier: ViewModifier {
             .overlay(alignment: .leading) {
                 LinearGradient(
                     colors: [
-                        ViewerTheme.traceViewerInsetPanelInnerShadow.opacity(0.7),
+                        ViewerTheme.traceViewerInsetPanelInnerShadowSoft,
                         .clear
                     ],
                     startPoint: .leading,

@@ -298,7 +298,7 @@ extension TraceViewerGraph {
         private var fillColor: Color {
             overlay.isSelected
                 ? ViewerTheme.sectionBackground
-                : Color(.sRGB, red: 249 / 255, green: 250 / 255, blue: 251 / 255)
+                : ViewerTheme.overviewRegionBackground
         }
 
         private var strokeColor: Color {
@@ -334,7 +334,9 @@ extension TraceViewerGraph {
                     )
                 }
                 .shadow(
-                    color: Color.black.opacity(overlay.isSelected ? 0.08 : 0.05),
+                    color: overlay.isSelected
+                        ? ViewerTheme.overviewRegionSelectedShadow
+                        : ViewerTheme.overviewRegionShadow,
                     radius: layout.regionShadowRadius,
                     y: layout.regionShadowYOffset
                 )
@@ -358,7 +360,7 @@ extension TraceViewerGraph {
                         )
                     }
                     .stroke(
-                        ViewerTheme.sectionStroke.opacity(0.65),
+                        ViewerTheme.sectionStrokeMuted,
                         style: StrokeStyle(lineWidth: 1, dash: [4, 5])
                     )
                 }
@@ -375,7 +377,7 @@ extension TraceViewerGraph {
         var body: some View {
             Text(overlay.segment.storeName)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(ViewerTheme.primaryText.opacity(0.82))
+                .foregroundStyle(ViewerTheme.primaryTextMuted)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(
@@ -609,7 +611,7 @@ extension TraceViewerGraph {
         var body: some View {
             Text(text)
                 .font(.system(size: Self.fontSize, weight: .medium))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(ViewerTheme.tooltipText)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -618,9 +620,9 @@ extension TraceViewerGraph {
                 .frame(width: width, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.black.opacity(0.82))
+                        .fill(ViewerTheme.tooltipBackground)
                 )
-                .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 1)
+                .shadow(color: ViewerTheme.tooltipShadow, radius: 3, x: 0, y: 1)
         }
     }
 }

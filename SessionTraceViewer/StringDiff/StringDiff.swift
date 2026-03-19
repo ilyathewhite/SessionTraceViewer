@@ -69,7 +69,12 @@ enum StringDiff: StoreNamespace {
         }
 
         var rowTint: Color {
-            highlightBackground.opacity(0.42)
+            switch self {
+            case .old:
+                ViewerTheme.diffOldRowTint
+            case .new:
+                ViewerTheme.diffNewRowTint
+            }
         }
     }
 
