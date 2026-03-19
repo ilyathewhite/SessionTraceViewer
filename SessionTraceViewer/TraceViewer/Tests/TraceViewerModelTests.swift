@@ -1440,29 +1440,42 @@ extension ModelTests.TraceViewerModelTests {
     }
 
     @Test
-    func testSyncScheduledEffectFanOutBatchIsHiddenInOverviewGraph() async throws {
+    func testSyncScheduledEffectTraceDoesNotCreateBatchNode() async throws {
         let state = try await makeStateFromSyncScheduledEffectsTrace()
 
-        let fanOutBatchIDs = state.itemsByID.values.compactMap { item -> String? in
-            guard case .batch(let batch) = item.node,
-                  batch.kind == .syncFanOut else {
-                return nil
-            }
+        let batchIDs = state.graph.nodes.compactMap { node -> String? in
+            guard case .batch(let batch) = node else { return nil }
             return batch.id.rawValue
         }
 
-        XCTAssertFalse(fanOutBatchIDs.isEmpty, "Expected a sync fan-out batch in the test trace.")
+        XCTAssertTrue(
+            batchIDs.isEmpty,
+            "Sync scheduled effect traces should not create batch nodes."
+        )
+    }
 
-        for batchID in fanOutBatchIDs {
-            XCTAssertNil(
-                state.overviewGraphNodeByID[batchID],
-                "Sync fan-out batch \(batchID) should not render as an overview node."
-            )
-            XCTAssertFalse(
-                state.overviewGraphNodes.contains { $0.predecessorIDs.contains(batchID) },
-                "Overview edges should not target hidden sync fan-out batch \(batchID)."
-            )
+    @Test
+    func testSyncScheduledEffectActionsUseParentActionAsOverviewPredecessor() async throws {
+        let state = try await makeStateFromSyncScheduledEffectsTrace()
+
+        guard let scheduleEffectsAction = state.itemsByID.values.compactMap({ item -> SessionGraph.ActionNode? in
+            guard case .action(let action) = item.node else { return nil }
+            guard action.actionCase == "scheduleEffects" else { return nil }
+            return action
+        }).first,
+        let alphaAction = overviewEffectActionNode(
+            named: "startAlpha",
+            in: state
+        ), let betaAction = overviewEffectActionNode(
+            named: "startBeta",
+            in: state
+        ) else {
+            XCTFail("Expected sync scheduled effect actions were not present in the overview graph.")
+            return
         }
+
+        XCTAssertEqual(alphaAction.predecessorIDs, [scheduleEffectsAction.id.rawValue])
+        XCTAssertEqual(betaAction.predecessorIDs, [scheduleEffectsAction.id.rawValue])
     }
 
     @Test

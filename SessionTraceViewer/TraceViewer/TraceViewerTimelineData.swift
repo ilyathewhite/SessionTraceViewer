@@ -53,7 +53,6 @@ extension TraceViewer.TimelineData {
         storeName: String
     ) {
         var childrenByParentID: [String: [String]] = [:]
-        var actionProducerByBatchID: [String: String] = [:]
         var effectEmitterByBatchID: [String: String] = [:]
         for edge in traceCollection.sessionGraph.edges {
             switch edge {
@@ -61,8 +60,6 @@ extension TraceViewer.TimelineData {
                 childrenByParentID[nested.parentNodeID, default: []].append(nested.childNodeID)
             case .contains(let contains):
                 childrenByParentID[contains.batchID.rawValue, default: []].append(contains.nodeID)
-            case .producedAction(let produced):
-                actionProducerByBatchID[produced.nodeID] = produced.actionID.rawValue
             case .emittedAction(let emitted):
                 effectEmitterByBatchID[emitted.nodeID] = emitted.effectID.rawValue
             default:
@@ -188,7 +185,6 @@ extension TraceViewer.TimelineData {
                 childrenByParentID: childrenByParentID,
                 actionByID: actionByID,
                 effectByID: effectByID,
-                actionProducerByBatchID: actionProducerByBatchID,
                 effectEmitterByBatchID: effectEmitterByBatchID,
                 visibleAppliedMutationActionIDs: visibleAppliedMutationActionIDs,
                 visibleAppliedEffectActionIDs: visibleAppliedEffectActionIDs,
@@ -486,7 +482,6 @@ extension TraceViewer {
         childrenByParentID: [String: [String]],
         actionByID: [String: SessionGraph.ActionNode],
         effectByID: [String: SessionGraph.EffectNode],
-        actionProducerByBatchID: [String: String],
         effectEmitterByBatchID: [String: String],
         visibleAppliedMutationActionIDs: Set<String>,
         visibleAppliedEffectActionIDs: Set<String>,
@@ -620,13 +615,11 @@ extension TraceViewer {
                 colorKind: .batch,
                 title: "Batch \(batch.kind.rawValue)",
                 subtitle: "actions=\(batch.actionCount)",
-                date: actionProducerByBatchID[batch.id.rawValue]
-                    .flatMap { actionByID[$0]?.receivedAt }
-                    ?? effectEmitterByBatchID[batch.id.rawValue]
-                        .flatMap { effectByID[$0] }
-                        .flatMap { effect in
-                            effect.startedByActionID.flatMap { actionByID[$0.rawValue]?.receivedAt }
-                        },
+                date: effectEmitterByBatchID[batch.id.rawValue]
+                    .flatMap { effectByID[$0] }
+                    .flatMap { effect in
+                        effect.startedByActionID.flatMap { actionByID[$0.rawValue]?.receivedAt }
+                    },
                 childIDs: childrenByParentID[batch.id.rawValue] ?? [],
                 node: node
             )

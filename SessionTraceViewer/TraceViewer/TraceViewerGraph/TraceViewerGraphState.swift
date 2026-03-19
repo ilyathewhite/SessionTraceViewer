@@ -209,23 +209,11 @@ extension TraceViewerGraph.StoreState {
 extension TraceViewerGraph {
     private static let trackLaneGap = 1
 
-    static func isHiddenOverviewNode(
-        _ item: TraceViewer.TimelineItem
-    ) -> Bool {
-        guard case .batch(let batch) = item.node else {
-            return false
-        }
-        return batch.kind == .syncFanOut
-    }
-
     static func visibleOverviewOrderedIDs(
         from orderedIDs: [String],
         itemsByID: [String: TraceViewer.TimelineItem]
     ) -> [String] {
-        orderedIDs.filter { id in
-            guard let item = itemsByID[id] else { return false }
-            return !isHiddenOverviewNode(item)
-        }
+        orderedIDs.filter { itemsByID[$0] != nil }
     }
 
     static func buildSource(
@@ -462,7 +450,6 @@ extension TraceViewerGraph {
                 let lineKindByPredecessorID = layout.commitGraphLayout.edgeLineKindByPredecessorID
                 for localID in layout.timelineData.orderedIDs {
                     guard let item = layout.timelineData.itemsByID[localID] else { continue }
-                    guard !isHiddenOverviewNode(item) else { continue }
                     let globalID = TraceViewer.scopedTimelineID(
                         storeInstanceID: layout.storeTrace.id,
                         localNodeID: localID
@@ -573,7 +560,7 @@ extension TraceViewerGraph {
         var startedEffectsByActionID: [String: [SessionGraph.StartedEffectEdge]] = [:]
         var startedActionByEffectID: [String: String] = [:]
         var emittedEdgesByEffectID: [String: [SessionGraph.EmittedActionEdge]] = [:]
-        var childNodeIDsByBatchID: [String: [String]] = [:]
+        var producedEdgesByActionID: [String: [SessionGraph.ProducedActionEdge]] = [:]
         var inputStateByMutatingActionID: [String: String] = [:]
         var resultActionByStateID: [String: String] = [:]
         var mutatingActionIDs: Set<String> = []
@@ -586,11 +573,10 @@ extension TraceViewerGraph {
                 startedActionByEffectID[startedEffect.effectID.rawValue] = startedEffect.actionID.rawValue
             case .producedAction(let produced):
                 actionProducerByNodeID[produced.nodeID] = produced.actionID.rawValue
+                producedEdgesByActionID[produced.actionID.rawValue, default: []].append(produced)
             case .emittedAction(let emitted):
                 effectEmitterByNodeID[emitted.nodeID] = emitted.effectID.rawValue
                 emittedEdgesByEffectID[emitted.effectID.rawValue, default: []].append(emitted)
-            case .contains(let contains):
-                childNodeIDsByBatchID[contains.batchID.rawValue, default: []].append(contains.nodeID)
             case .stateInput(let stateInput):
                 inputStateByMutatingActionID[stateInput.actionID.rawValue] = stateInput.stateID.rawValue
             case .stateResult(let stateResult):
@@ -612,12 +598,6 @@ extension TraceViewerGraph {
                 .effectID.rawValue ?? ""
         }
         .filter { !$0.value.isEmpty }
-
-        let hiddenOverviewNodeIDs = Set(
-            itemsByID.compactMap { pair in
-                isHiddenOverviewNode(pair.value) ? pair.key : nil
-            }
-        )
 
         for item in itemsByID.values {
             switch item.node {
@@ -753,21 +733,28 @@ extension TraceViewerGraph {
             lastIndexByEffectID[effectID] = max(existingLast, startIndex)
         }
 
-        let syncScheduledEffectActionIDsByBatchID: [String: [String]] = itemsByID.reduce(
+        let syncScheduledEffectActionIDsByAnchorID: [String: [String]] = producedEdgesByActionID.reduce(
             into: [:]
         ) { partialResult, pair in
-            guard case .batch(let batch) = pair.value.node,
-                  batch.kind == .syncFanOut else {
-                return
-            }
-
-            let effectActionIDs = (childNodeIDsByBatchID[pair.key] ?? []).filter { childID in
-                guard let childItem = itemsByID[childID],
-                      case .action(let action) = childItem.node else {
-                    return false
+            let effectActionIDs = pair.value
+                .sorted { lhs, rhs in
+                    if lhs.productionIndex == rhs.productionIndex {
+                        return lhs.order < rhs.order
+                    }
+                    return lhs.productionIndex < rhs.productionIndex
                 }
-                return action.kind == .effect
-            }
+                .compactMap { produced -> String? in
+                    guard let childItem = itemsByID[produced.nodeID],
+                          case .action(let action) = childItem.node,
+                          action.kind == .effect else {
+                        return nil
+                    }
+                    guard case .action(let sourceActionID) = action.source,
+                          sourceActionID.rawValue == pair.key else {
+                        return nil
+                    }
+                    return action.id.rawValue
+                }
             guard effectActionIDs.count > 1 else { return }
             partialResult[pair.key] = effectActionIDs
         }
@@ -775,12 +762,12 @@ extension TraceViewerGraph {
         var groupedStartIndexByEffectID: [String: Int] = [:]
         var groupedStartRankByEffectID: [String: Int] = [:]
         var sharedColumnAnchorByID: [String: String] = [:]
-        for (batchID, actionIDs) in syncScheduledEffectActionIDsByBatchID {
-            guard let batchIndex = orderedIDs.firstIndex(of: batchID) else { continue }
+        for (anchorID, actionIDs) in syncScheduledEffectActionIDsByAnchorID {
+            guard let anchorIndex = orderedIDs.firstIndex(of: anchorID) else { continue }
             for (rank, actionID) in actionIDs.enumerated() {
-                sharedColumnAnchorByID[actionID] = batchID
+                sharedColumnAnchorByID[actionID] = anchorID
                 guard let effectID = resolveBranchEffectID(for: actionID) else { continue }
-                groupedStartIndexByEffectID[effectID] = batchIndex
+                groupedStartIndexByEffectID[effectID] = anchorIndex
                 groupedStartRankByEffectID[effectID] = rank
             }
         }
@@ -915,7 +902,7 @@ extension TraceViewerGraph {
             return predecessorIDs.uniqued()
         }
 
-        let visibleNodeIDs = Set(itemsByID.keys).subtracting(hiddenOverviewNodeIDs)
+        let visibleNodeIDs = Set(itemsByID.keys)
         var predecessorAliasByHiddenNodeID: [String: String] = [:]
         for edge in graph.edges {
             switch edge {
@@ -927,12 +914,6 @@ extension TraceViewerGraph {
             default:
                 break
             }
-        }
-
-        for hiddenNodeID in hiddenOverviewNodeIDs {
-            guard predecessorAliasByHiddenNodeID[hiddenNodeID] == nil else { continue }
-            guard let aliasID = causalPredecessors(for: hiddenNodeID).first else { continue }
-            predecessorAliasByHiddenNodeID[hiddenNodeID] = aliasID
         }
 
         func resolveVisibleNodeID(_ id: String) -> String? {
@@ -1125,23 +1106,6 @@ extension TraceViewerGraph {
 
         for timelineID in orderedTimelineIDs {
             guard let item = itemsByID[timelineID] else { continue }
-            if isHiddenOverviewNode(item) {
-                let hiddenColumn: Int = {
-                    if let anchorID = sharedColumnAnchorByID[timelineID],
-                       let anchorColumn = columnByTimelineID[anchorID] {
-                        return anchorColumn + 1
-                    }
-                    let predecessorColumns = (predecessorIDsByTimelineID[timelineID] ?? [])
-                        .compactMap { columnByTimelineID[$0] }
-                    if let predecessorColumn = predecessorColumns.max() {
-                        return predecessorColumn
-                    }
-                    return max(nextColumn - 1, 0)
-                }()
-                columnByTimelineID[timelineID] = hiddenColumn
-                continue
-            }
-
             let kind: TraceViewerGraph.OverviewGraphNode.Kind = {
                 switch item.kind {
                 case .state:
